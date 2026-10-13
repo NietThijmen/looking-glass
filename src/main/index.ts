@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import { isDev, isSmokeTest, rendererDir } from './env'
 import { registerAgentHandlers, startAgentServices, stopAgentServices } from './ipc/agent'
 import { registerAppHandlers } from './ipc/app'
+import { registerBrowserHandlers } from './ipc/browser'
 import { closeWorkspace, openWorkspace, registerWorkspaceHandlers, terminals } from './ipc/workspace'
 import { installMenu } from './menu'
 import { applyHardening } from './security/hardening'
@@ -37,6 +38,7 @@ if (!isSmokeTest && !app.requestSingleInstanceLock()) {
     registerAppHandlers()
     registerWorkspaceHandlers()
     registerAgentHandlers()
+    registerBrowserHandlers()
     await startAgentServices()
     installMenu()
 

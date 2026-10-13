@@ -6,6 +6,7 @@ import type {
   AuthMethod,
   ContentBlock,
   PermissionOption,
+  PromptCapabilities,
   SessionModeState,
   SessionUpdate,
   StopReason,
@@ -31,6 +32,8 @@ export interface NewSessionResult {
   sessionId: string
   agentId: string
   modes?: SessionModeState | null
+  /** What the agent accepts in prompts beyond text (images, embedded file contents). */
+  promptCapabilities: PromptCapabilities
 }
 
 /** Returned instead of a session when the agent wants the user to log in first. */
@@ -44,6 +47,8 @@ export interface AuthRequired {
 export interface PromptResult {
   stopReason: StopReason | 'error'
   error?: string
+  /** Snapshot taken before the turn; restoring it undoes the turn's file changes. */
+  checkpoint?: string | null
 }
 
 export interface PermissionRequest {

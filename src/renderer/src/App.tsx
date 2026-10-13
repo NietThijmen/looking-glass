@@ -3,11 +3,13 @@ import { useEffect, useState } from 'react'
 import type { AppInfo, MenuCommand, WindowState } from '../../shared/ipc'
 import { AgentPanel } from './agent/AgentPanel'
 import { createEditor } from './editor/diffsConfig'
-import { EditorArea } from './editor/EditorArea'
+import { EditorArea, openBrowserTab } from './editor/EditorArea'
 import { publishEditorSnapshots } from './editor/publishSnapshot'
 import { ActivityBar, Sidebar } from './layout/Sidebar'
 import { useAgents } from './store/agents'
+import { useBrowser } from './store/browser'
 import { useEditor } from './store/editor'
+import { useReview } from './store/review'
 import { useUi } from './store/ui'
 import { useWorkspace } from './store/workspace'
 import { TerminalPanel } from './terminal/TerminalPanel'
@@ -37,6 +39,17 @@ function runMenuCommand(command: MenuCommand): void {
     case 'show-git':
       ui.showSidebar('git')
       break
+    case 'new-browser-tab':
+      openBrowserTab()
+      break
+    case 'toggle-picker': {
+      const tab = editor.tabs.find((t) => t.id === editor.activeId)
+      const tabId = tab?.kind === 'browser' ? tab.path : useBrowser.getState().lastTabId
+      if (!tabId) break
+      if (tab?.kind !== 'browser') editor.adoptBrowser(tabId)
+      void window.lookingglass.browser.setPicking(tabId, !useBrowser.getState().tabs[tabId]?.picking)
+      break
+    }
   }
 }
 
@@ -52,6 +65,8 @@ function useBoot(): boolean {
         useEditor.getState().reset()
         // Agents are bound to the old folder and have been stopped by main.
         useAgents.getState().reset()
+        useBrowser.getState().reset()
+        void useReview.getState().load()
         void useWorkspace.getState().setWorkspace(info)
       }),
       api.fs.onChanged((changes) => {
@@ -59,6 +74,18 @@ function useBoot(): boolean {
         useEditor.getState().applyFsChanges(changes)
       }),
       api.git.onChanged(() => void useWorkspace.getState().refreshGit()),
+      api.review.onChanged((entries) => useReview.getState().set(entries)),
+      api.browser.onState((state) => useBrowser.getState().setState(state)),
+      api.browser.onConsole(({ tabId, entry }) => useBrowser.getState().addConsole(tabId, entry)),
+      api.browser.onPicked((element) => useBrowser.getState().setPicked(element.tabId, element)),
+      api.browser.onOpened((state) => {
+        useBrowser.getState().setState(state)
+        useEditor.getState().adoptBrowser(state.tabId)
+      }),
+      api.fs.onChanged((changes) => useReview.getState().touch(changes.map((c) => c.path))),
+      api.editor.onReloadFile(({ path }) => {
+        if (useEditor.getState().buffers[path]) void useEditor.getState().reloadFromDisk(path)
+      }),
       api.editor.onOpenFile(({ path, line }) => {
         void useEditor.getState().openFile(path, line ? { line, column: 0 } : undefined)
       }),

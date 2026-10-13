@@ -3,6 +3,7 @@ import type { PlanEntry, ToolCallContent, ToolKind } from '@agentclientprotocol/
 import { memo, useState } from 'react'
 import { baseOptions } from '../editor/diffsConfig'
 import { useEditor } from '../store/editor'
+import { useUi } from '../store/ui'
 import { useWorkspace } from '../store/workspace'
 import { Markdown } from './Markdown'
 import { blockText, type PlanState, type ToolCallState, type TranscriptItem } from './transcript'
@@ -72,7 +73,14 @@ function ToolContent({ content }: { content: ToolCallContent }) {
         </div>
       )
     case 'terminal':
-      return <div className="text-[11px] text-muted">Terminal {content.terminalId}</div>
+      return (
+        <button
+          className="text-[11px] text-accent hover:underline"
+          onClick={() => useUi.getState().focusTerminal(content.terminalId)}
+        >
+          ❯ Show in terminal panel
+        </button>
+      )
   }
 }
 
@@ -159,11 +167,32 @@ const stopLabel: Record<string, string> = {
   refusal: 'The agent refused',
 }
 
-const Item = memo(function Item({ item, live }: { item: TranscriptItem; live: boolean }) {
+const Item = memo(function Item({
+  item,
+  live,
+  onRestore,
+}: {
+  item: TranscriptItem
+  live: boolean
+  onRestore(itemId: number): void
+}) {
   switch (item.kind) {
     case 'user':
       return (
-        <div className="ml-6 rounded-lg bg-white/5 px-3 py-2" data-testid="user-message">
+        <div className="group relative ml-6 rounded-lg bg-white/5 px-3 py-2" data-testid="user-message">
+          {item.checkpoint && (
+            <button
+              data-testid="restore-checkpoint"
+              title="Put files back the way they were before this message"
+              onClick={() => {
+                if (window.confirm('Restore all files to how they were before this message?'))
+                  onRestore(item.id)
+              }}
+              className="absolute top-1 right-1 hidden rounded px-1.5 text-[10px] text-muted group-hover:block hover:bg-white/10 hover:text-fg"
+            >
+              ↺ Restore
+            </button>
+          )}
           <div className="whitespace-pre-wrap select-text">{item.text}</div>
           {item.attachments.length > 0 && (
             <div className="mt-1 text-[11px] text-muted">📎 {item.attachments.join(', ')}</div>
@@ -198,11 +227,19 @@ const Item = memo(function Item({ item, live }: { item: TranscriptItem; live: bo
   }
 })
 
-export function TranscriptView({ items, busy }: { items: TranscriptItem[]; busy: boolean }) {
+export function TranscriptView({
+  items,
+  busy,
+  onRestore,
+}: {
+  items: TranscriptItem[]
+  busy: boolean
+  onRestore(itemId: number): void
+}) {
   return (
     <div className="space-y-3">
       {items.map((item, i) => (
-        <Item key={item.id} item={item} live={busy && i === items.length - 1} />
+        <Item key={item.id} item={item} live={busy && i === items.length - 1} onRestore={onRestore} />
       ))}
     </div>
   )

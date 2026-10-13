@@ -19,6 +19,16 @@ import type {
   PromptResult,
   SessionUpdate,
 } from './agent'
+import type {
+  BrowserBounds,
+  BrowserTabState,
+  ConsoleEntry,
+  Picked,
+  PickedElement,
+  PickedRegion,
+  PickMode,
+} from './browser'
+import type { ReviewEntry } from './review'
 
 export interface AppInfo {
   name: string
@@ -130,7 +140,15 @@ export interface TerminalInfo {
 }
 
 export type MenuCommand =
-  'open-folder' | 'save' | 'close-tab' | 'toggle-terminal' | 'show-explorer' | 'show-search' | 'show-git'
+  | 'open-folder'
+  | 'save'
+  | 'close-tab'
+  | 'toggle-terminal'
+  | 'show-explorer'
+  | 'show-search'
+  | 'show-git'
+  | 'toggle-picker'
+  | 'new-browser-tab'
 
 /** Renderer → main request/response channels. */
 export interface InvokeContract {
@@ -168,6 +186,41 @@ export interface InvokeContract {
   'agent:startTerminalAuth': { args: [agentId: string, methodId: string]; result: TerminalInfo }
 
   'app:openExternal': { args: [url: string]; result: void }
+
+  'review:list': { args: []; result: ReviewEntry[] }
+  /** Baseline contents of a file under review; null when the file didn't exist (or isn't under review). */
+  'review:base': { args: [path: string]; result: string | null }
+  /** `null` path = every file. */
+  'review:accept': { args: [path: string | null]; result: void }
+  'review:reject': { args: [path: string | null]; result: void }
+  'review:setBase': { args: [path: string, content: string]; result: void }
+  'review:writeCurrent': { args: [path: string, content: string]; result: void }
+  'review:restore': { args: [checkpoint: string]; result: void }
+
+  'fs:listFiles': { args: []; result: string[] }
+  'git:diff': { args: []; result: string }
+
+  'browser:create': { args: [url: string]; result: BrowserTabState }
+  'browser:close': { args: [tabId: string]; result: void }
+  'browser:state': { args: [tabId: string]; result: BrowserTabState }
+  'browser:setBounds': { args: [tabId: string, bounds: BrowserBounds | null]; result: void }
+  'browser:navigate': { args: [tabId: string, url: string]; result: void }
+  'browser:back': { args: [tabId: string]; result: void }
+  'browser:forward': { args: [tabId: string]; result: void }
+  'browser:reload': { args: [tabId: string]; result: void }
+  'browser:openDevTools': { args: [tabId: string]; result: void }
+  'browser:setPicking': { args: [tabId: string, picking: boolean]; result: void }
+  /** Replace the last picked element with its parent or first child. */
+  'browser:walk': { args: [tabId: string, direction: 'parent' | 'child']; result: PickedElement | null }
+  'browser:captureRegion': { args: [tabId: string]; result: PickedRegion | null }
+  /** Drop one picked item by index, or all of them. */
+  'browser:unpick': { args: [tabId: string, index?: number]; result: void }
+  'browser:screenshot': { args: [tabId: string]; result: string }
+  /** `previewUrl` from the workspace's `.lookingglass/settings.json`. */
+  'browser:previewUrl': { args: []; result: string | null }
+  'browser:console': { args: [tabId: string]; result: ConsoleEntry[] }
+  'browser:clearConsole': { args: [tabId: string]; result: void }
+  'browser:setAgentBlocked': { args: [tabId: string, blocked: boolean]; result: void }
 }
 
 /** Main → renderer push channels. */
@@ -181,6 +234,14 @@ export interface EventContract {
   'terminal:exit': { id: string; exitCode: number }
   /** A terminal main started on its own (e.g. an agent login), for the panel to show. */
   'terminal:opened': TerminalInfo
+  'review:changed': ReviewEntry[]
+  'browser:state': BrowserTabState
+  'browser:console': { tabId: string; entry: ConsoleEntry }
+  'browser:picked': { item: Picked; mode: PickMode }
+  /** An agent opened a tab; the renderer should show it. */
+  'browser:opened': BrowserTabState
+  /** An agent rewrote a file through ACP; open buffers should reload it. */
+  'editor:reloadFile': { path: string }
   'editor:openFile': { path: string; line?: number }
   'agent:status': { agentId: string; status: AgentStatus }
   'agent:update': { sessionId: string; update: SessionUpdate }
@@ -219,6 +280,8 @@ export interface LookingglassApi {
     readDir(path: string): Promise<DirEntry[]>
     readFile(path: string): Promise<FileReadResult>
     writeFile(path: string, contents: string): Promise<FileWriteResult>
+    /** Workspace files (gitignore respected), for @-mentions. */
+    listFiles(): Promise<string[]>
     onChanged(listener: Listener<'fs:changed'>): Unsubscribe
   }
   search: {
@@ -227,11 +290,48 @@ export interface LookingglassApi {
   git: {
     status(): Promise<GitStatus | null>
     headContents(path: string): Promise<string | null>
+    /** `git diff HEAD` for the workspace. */
+    diff(): Promise<string>
     onChanged(listener: Listener<'git:changed'>): Unsubscribe
   }
   editor: {
     publishSnapshot(snapshot: EditorSnapshot): Promise<void>
     onOpenFile(listener: Listener<'editor:openFile'>): Unsubscribe
+    onReloadFile(listener: Listener<'editor:reloadFile'>): Unsubscribe
+  }
+  browser: {
+    create(url: string): Promise<BrowserTabState>
+    close(tabId: string): Promise<void>
+    state(tabId: string): Promise<BrowserTabState>
+    setBounds(tabId: string, bounds: BrowserBounds | null): Promise<void>
+    navigate(tabId: string, url: string): Promise<void>
+    back(tabId: string): Promise<void>
+    forward(tabId: string): Promise<void>
+    reload(tabId: string): Promise<void>
+    openDevTools(tabId: string): Promise<void>
+    setPicking(tabId: string, picking: boolean): Promise<void>
+    walk(tabId: string, direction: 'parent' | 'child'): Promise<PickedElement | null>
+    captureRegion(tabId: string): Promise<PickedRegion | null>
+    unpick(tabId: string, index?: number): Promise<void>
+    screenshot(tabId: string): Promise<string>
+    previewUrl(): Promise<string | null>
+    console(tabId: string): Promise<ConsoleEntry[]>
+    clearConsole(tabId: string): Promise<void>
+    setAgentBlocked(tabId: string, blocked: boolean): Promise<void>
+    onState(listener: Listener<'browser:state'>): Unsubscribe
+    onConsole(listener: Listener<'browser:console'>): Unsubscribe
+    onPicked(listener: Listener<'browser:picked'>): Unsubscribe
+    onOpened(listener: Listener<'browser:opened'>): Unsubscribe
+  }
+  review: {
+    list(): Promise<ReviewEntry[]>
+    base(path: string): Promise<string | null>
+    accept(path: string | null): Promise<void>
+    reject(path: string | null): Promise<void>
+    setBase(path: string, content: string): Promise<void>
+    writeCurrent(path: string, content: string): Promise<void>
+    restore(checkpoint: string): Promise<void>
+    onChanged(listener: Listener<'review:changed'>): Unsubscribe
   }
   agent: {
     list(): Promise<AgentSummary[]>

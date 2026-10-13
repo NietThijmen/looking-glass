@@ -2,6 +2,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { spawn, type IPty } from 'node-pty'
 import type { TerminalCreateOptions, TerminalInfo } from '../../shared/ipc'
+import { childEnv } from '../childEnv'
 
 const FLUSH_MS = 8
 
@@ -29,6 +30,7 @@ function defaultShell(): { file: string; args: string[] } {
  */
 export class TerminalService {
   #sessions = new Map<string, Session>()
+  #observers = new Map<string, TerminalHandlers>()
   #nextId = 1
 
   constructor(private readonly handlers: TerminalHandlers) {}
@@ -46,13 +48,12 @@ export class TerminalService {
       cols: Math.max(2, Math.floor(options.cols)),
       rows: Math.max(1, Math.floor(options.rows)),
       cwd: cwd ?? os.homedir(),
-      env: {
-        ...process.env,
+      env: childEnv({
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
         TERM_PROGRAM: 'Lookingglass',
         ...command?.env,
-      } as Record<string, string>,
+      }),
     })
 
     const session: Session = { pty, buffer: '', timer: undefined }
@@ -66,9 +67,20 @@ export class TerminalService {
       this.#flush(id)
       this.#sessions.delete(id)
       this.handlers.onExit(id, exitCode)
+      this.#observers.get(id)?.onExit(id, exitCode)
+      this.#observers.delete(id)
     })
 
     return { id, title: command?.title ?? path.basename(shell.file) }
+  }
+
+  /** Extra listener for one terminal's output and exit (used for agent terminals). */
+  observe(id: string, observer: TerminalHandlers): void {
+    this.#observers.set(id, observer)
+  }
+
+  isRunning(id: string): boolean {
+    return this.#sessions.has(id)
   }
 
   write(id: string, data: string): void {
@@ -106,5 +118,6 @@ export class TerminalService {
     const data = session.buffer
     session.buffer = ''
     this.handlers.onData(id, data)
+    this.#observers.get(id)?.onData(id, data)
   }
 }

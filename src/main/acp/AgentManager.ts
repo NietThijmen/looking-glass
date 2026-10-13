@@ -12,6 +12,8 @@ import type {
 import type { EditorState } from '../editor/EditorState'
 import type { EditorMcpHandle } from '../mcp/editorMcpServer'
 import type { PermissionService } from '../permissions/PermissionService'
+import type { ReviewService } from '../review/ReviewService'
+import type { AgentTerminals } from '../terminal/AgentTerminals'
 import type { WorkspaceService } from '../workspace/WorkspaceService'
 import { AcpClient } from './AcpClient'
 import { summarize, type AgentDefinition } from './definition'
@@ -24,6 +26,11 @@ export interface AgentManagerDeps {
   mcp(): EditorMcpHandle | null
   onStatus(agentId: string, status: AgentStatus): void
   onSessionUpdate(notification: SessionNotification): void
+  /** Optional so tests can run without them. */
+  review?: Pick<ReviewService, 'beginTurn' | 'endTurn' | 'recordAgentWrite'>
+  terminals?: AgentTerminals
+  /** An agent wrote `path` through ACP (its contents already include any unsaved edits it read). */
+  onAgentWrite?(path: string): void
 }
 
 /** 1-based `line` and `limit` as in `fs/read_text_file`. */
@@ -69,7 +76,12 @@ export class AgentManager {
     try {
       const response = await agent.client.newSession(root, this.#mcpServers(agent.client))
       this.#sessions.set(response.sessionId, agentId)
-      return { sessionId: response.sessionId, agentId, modes: response.modes ?? null }
+      return {
+        sessionId: response.sessionId,
+        agentId,
+        modes: response.modes ?? null,
+        promptCapabilities: agent.client.initializeResponse?.agentCapabilities?.promptCapabilities ?? {},
+      }
     } catch (error) {
       if (error instanceof RequestError && error.code === AUTH_REQUIRED_CODE) {
         return {
@@ -109,11 +121,18 @@ export class AgentManager {
 
   async prompt(sessionId: string, prompt: ContentBlock[]): Promise<PromptResult> {
     const client = this.#clientFor(sessionId)
+    const checkpoint = (await this.deps.review?.beginTurn(sessionId)) ?? null
     try {
       const response = await client.prompt(sessionId, prompt)
-      return { stopReason: response.stopReason }
+      return { stopReason: response.stopReason, checkpoint }
     } catch (error) {
-      return { stopReason: 'error', error: error instanceof Error ? error.message : String(error) }
+      return {
+        stopReason: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        checkpoint,
+      }
+    } finally {
+      await this.deps.review?.endTurn(sessionId)
     }
   }
 
@@ -129,12 +148,18 @@ export class AgentManager {
   /** Stop every agent, e.g. when the workspace changes (sessions are bound to a cwd). */
   disposeAll(): void {
     this.deps.permissions.cancelAll()
+    this.deps.terminals?.releaseAll()
     for (const [agentId, agent] of this.#running) {
       agent.client.dispose()
       this.#setStatus(agentId, { state: 'stopped' })
     }
     this.#running.clear()
     this.#sessions.clear()
+  }
+
+  #requireTerminals(): AgentTerminals {
+    if (!this.deps.terminals) throw RequestError.methodNotFound('terminal/create')
+    return this.deps.terminals
   }
 
   #clientFor(sessionId: string): AcpClient {
@@ -179,8 +204,25 @@ export class AgentManager {
           return sliceLines(file.contents, line, limit)
         },
         writeTextFile: async ({ path: abs, content }) => {
-          // Phase 3 turns this into a reviewable pending edit; for now it writes through.
-          await this.deps.workspace.writeFile(await this.#toWorkspacePath(abs), content)
+          // Written straight to disk so the agent's own builds and tests see it; the user
+          // reviews it afterwards against the baseline (see ReviewService).
+          const rel = await this.#toWorkspacePath(abs)
+          const before = await this.deps.workspace.readText(rel)
+          await this.deps.workspace.writeFile(rel, content)
+          await this.deps.review?.recordAgentWrite(rel, before)
+          this.deps.onAgentWrite?.(rel)
+        },
+        terminal: {
+          create: async (params) => {
+            const terminals = this.#requireTerminals()
+            const root = this.deps.workspace.root!
+            const cwd = params.cwd ? path.join(root, await this.#toWorkspacePath(params.cwd)) : root
+            return terminals.create(params, cwd, definition.label)
+          },
+          output: (id) => this.#requireTerminals().output(id),
+          waitForExit: (id) => this.#requireTerminals().waitForExit(id),
+          kill: (id) => this.#requireTerminals().kill(id),
+          release: (id) => this.#requireTerminals().release(id),
         },
         requestPermission: (params) => this.deps.permissions.request(params),
         onSessionUpdate: (notification) => this.deps.onSessionUpdate(notification),

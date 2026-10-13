@@ -2,7 +2,7 @@
 
 > An AI-first code editor in the spirit of Cursor, built on Electron. The difference: **it ships no agent of its own.** It speaks the [Agent Client Protocol (ACP)](https://agentclientprotocol.com), so you can use the agent you already pay for (Claude Code, Codex, or anything else that speaks ACP) inside a full editor.
 
-**Status:** Phases 0 (skeleton), 1 (editor shell) and 2 (ACP chat) are done. Everything from Phase 3 on is still a plan. See the [Roadmap](#roadmap).
+**Status:** Phases 0 to 3 (skeleton, editor shell, ACP chat, Cursor-style editing) are done. Everything from Phase 4 on is still a plan. See the [Roadmap](#roadmap).
 
 ---
 
@@ -183,22 +183,22 @@ The editor and all diff views use [`@pierre/diffs`](https://diffs.com), a Shiki-
 
 This is the feature that makes it feel like Cursor rather than a terminal in a window.
 
-1. The agent calls `fs/write_text_file(path, content)`.
-2. Instead of writing to disk, the main process stores a **pending edit** `{sessionId, toolCallId, path, before, after}` and replies with success. The agent carries on as if the write happened.
-3. Later `fs/read_text_file` calls from the same session return the **pending** content, so the agent's view stays consistent.
-4. The renderer shows the edit:
-   - inline in the editor tab as a `FileDiff`, with **Accept / Reject per hunk** (the library's built-in hunk actions),
-   - in a "Changes" list in the agent panel (Accept all / Reject all / per-file),
-   - with the files marked in the file tree.
-5. Accepting writes to disk (or to the open buffer). Rejecting discards the edit, and we can optionally tell the agent in the next prompt ("user rejected changes to X").
+**Agent edits are applied to disk right away and reviewed afterwards.** Keeping edits pending would mean the agent's own `pnpm test` or build sees the old files, so we chose apply-then-review (see open question 2).
 
-**Setting:** "auto-apply agent edits" writes straight to disk and keeps a checkpoint for undo, for people who'd rather review in git.
+1. Before every prompt, Lookingglass takes a **checkpoint**: a snapshot of the work tree in a private "shadow" git repository under the app's data folder. It has its own git dir and index, uses the workspace as its work tree, honours `.gitignore`, skips `node_modules` and similar folders, and never touches the project's own `.git`. It works in folders that aren't git repos.
+2. The agent edits files, either through ACP `fs/write_text_file` or with its own tools. Both end up on disk.
+3. While the turn runs, and again when it ends, files that differ from the turn's checkpoint join the **review set**, with the checkpoint contents as their baseline. ACP writes are recorded directly too. A file keeps its first baseline across turns until you decide.
+4. The renderer shows the changes:
+   - a **changes bar** above the chat input with Keep all / Undo all and a per-file list,
+   - a **review tab** per file (`@pierre/diffs` `MultiFileDiff`) with **Keep / Undo on every hunk**,
+   - a banner on open editor tabs for changed files, and ✦ marks in the file tree.
+5. **Keep** moves the baseline to the current contents. **Undo** writes the baseline back (or deletes a file the agent created). Per-hunk decisions do the same for one hunk. A file drops out of review once it matches its baseline.
 
-**When the agent writes to disk itself** (bypassing `fs/write_text_file`): the FileWatcher sees the change while a turn is running. We snapshot the workspace's tracked files at the start of each turn (a lightweight git-stash-style checkpoint), so we can still show a diff and offer **Revert turn**. The UX is worse but still safe.
+Open editor tabs follow agent writes: ACP writes reload the buffer (the agent already read the unsaved contents), other changes reload a clean buffer or show the conflict banner.
 
 ### Checkpoints
 
-At the start of every prompt turn, record a checkpoint (the content hashes of touched files, or a git commit on a hidden ref). This gives **Restore to before this message** on every user message in the chat, as Cursor has.
+Every user message in the chat keeps the checkpoint taken before it. **Restore** (hover the message) puts every file changed since then back the way it was, including deleting files created since.
 
 ---
 
@@ -487,12 +487,12 @@ lookingglass/
 
 ### Phase 3: Cursor-style editing
 
-- [ ] Pending edits via `fs/write_text_file`, with per-hunk accept/reject in `FileDiff`
-- [ ] Changes list in the agent panel, Accept/Reject all
-- [ ] Per-turn checkpoints and "restore to before this message"
-- [ ] Fallback diffing for agents that write to disk directly
-- [ ] `terminal/*` handlers with agent terminals visible in the panel
-- [ ] @-mentions (files, folders, selection, terminal, git diff, problems), and images
+- [x] Agent edits reviewed against a baseline, with per-hunk keep/undo (apply-then-review, see [Edit review](#edit-review-the-core-ux))
+- [x] Changes list in the agent panel, Keep all / Undo all
+- [x] Per-turn checkpoints and "restore to before this message"
+- [x] Diffing for agents that write to disk directly (the same checkpoint mechanism)
+- [x] `terminal/*` handlers with agent terminals visible in the panel
+- [x] @-mentions (files, folders, selection, terminal, git diff) and pasted/dropped images. `@problems` waits for diagnostics (LSP bridge, Phase 6)
 
 ### Phase 4: Browser and element picker
 
@@ -535,8 +535,8 @@ lookingglass/
 
 ## Open questions
 
-1. **Edit interception coverage.** Which adapters actually route edits through `fs/write_text_file` and commands through `terminal/*` when we advertise those capabilities? This decides how often the fallback diffing in Phase 3 is needed. **Spike this first in Phase 2.**
-2. **Pending edits vs. agent self-verification.** If an agent writes a file (pending) and then runs `pnpm test` in a terminal, the tests see the _old_ disk contents. Options: auto-apply while a turn is running and review afterwards against the checkpoint (likely the right default), or keep edits pending and accept the inconsistency. Needs a decision.
+1. **Edit interception coverage.** _Partly answered._ With `terminal: true` advertised, Claude Code (adapter 0.89) still ran a shell command with its own tool rather than `terminal/*`. Because review is checkpoint-based, file edits are caught however they are written. Codex is still to check.
+2. **Pending edits vs. agent self-verification.** _Decided:_ edits apply to disk during the turn and are reviewed afterwards against the checkpoint, so the agent's own tests see its changes.
 3. **Session portability.** Should history be kept per agent only, or should we keep our own transcript so you can "continue this conversation in Codex" by replaying context into a new session?
 4. **Bundling adapters.** Ship pinned adapter binaries/packages with the app (reliable, larger download), or resolve them via `npx` on first use (smaller, needs Node on the user's machine)?
 5. **Language intelligence.** `@pierre/diffs` has no built-in language services (Monaco shipped TS/JS IntelliSense). Everything (diagnostics, hover, go-to-definition, completions) would come from an LSP bridge. How far to go in v1, given that agents already lean on their own tools for code understanding?
@@ -586,7 +586,8 @@ pnpm package      # installers for the current platform (unsigned for now)
 
 - **One process per agent**, shared by all its chats (`src/main/acp/`). `AcpClient` wraps the ACP SDK over stdio; `AgentManager` starts agents lazily, restarts them on next use after a crash, and stops them all when the workspace changes (sessions are bound to a folder).
 - **Agent file reads** (`fs/read_text_file`) return unsaved editor contents first (the renderer publishes a snapshot of open and dirty files), then disk, always through `WorkspaceService`. Absolute agent paths are mapped into the workspace, including `/tmp` vs `/private/tmp` style spellings; anything outside is refused.
-- **Agent file writes** currently write straight to disk. Phase 3 turns them into reviewable pending edits.
+- **Agent file writes** go to disk and into review (`src/main/review/`): `Checkpoints` is the shadow git repo, `ReviewService` keeps baselines, and the renderer's `review/hunks.ts` does per-hunk keep/undo by rebuilding text from diff segments.
+- **Agent terminals** (`src/main/terminal/AgentTerminals.ts`): `terminal/create` runs the command in a real pty that appears as a tab in the terminal panel; the agent gets plain text (ANSI stripped, tail kept within `outputByteLimit`).
 - **Permissions**: `PermissionService` answers read/search/think requests with the agent's "allow once" option and asks the user for everything else. Stop answers open requests with `cancelled`, as ACP requires.
 - **Login**: if `session/new` fails with `auth_required`, the chat shows the agent's auth methods. Terminal methods run in a Lookingglass terminal tab; the user retries when done.
 - **Editor MCP server**: a Streamable HTTP MCP server on 127.0.0.1 with a random bearer token, passed to every session whose agent supports HTTP MCP. Tools: `get_workspace_info`, `get_open_editors`, `get_git_status`, `open_file`.

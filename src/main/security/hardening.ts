@@ -1,4 +1,5 @@
 import { app, session } from 'electron'
+import { browserSession, hardenBrowserSession } from '../browser/BrowserService'
 import { isDev, rendererOrigin } from '../env'
 import { developmentCsp } from './csp'
 import { hasOrigin } from './paths'
@@ -14,6 +15,7 @@ export function applyHardening(): void {
   // Camera, mic, notifications, geolocation, …: nothing in the app UI needs them.
   ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
   ses.setPermissionCheckHandler(() => false)
+  hardenBrowserSession()
 
   // Production CSP is set by the app:// protocol handler; the dev server needs it injected.
   if (isDev) {
@@ -28,7 +30,10 @@ export function applyHardening(): void {
     })
   }
 
+  const browser = browserSession()
   app.on('web-contents-created', (_event, contents) => {
+    // Browser tabs are allowed to navigate anywhere; BrowserService sets their rules.
+    if (contents.session === browser) return
     contents.setWindowOpenHandler(() => ({ action: 'deny' }))
     contents.on('will-navigate', (event, url) => {
       if (!hasOrigin(url, rendererOrigin)) event.preventDefault()

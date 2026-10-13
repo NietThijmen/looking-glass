@@ -1,6 +1,18 @@
 import { app, type BrowserWindow } from 'electron'
 import fs from 'node:fs/promises'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { webContents, type WebContents } from 'electron'
+import { browserSession } from './browser/BrowserService'
+import { editorMcp } from './ipc/agent'
+import { browser } from './ipc/browser'
 import { send } from './ipc/typed'
+
+/** The page in the (single) smoke browser tab. */
+function browserContents(): WebContents | undefined {
+  const ses = browserSession()
+  return webContents.getAllWebContents().find((wc) => wc.session === ses && !wc.isDestroyed())
+}
 
 /** A check is a page expression, or a main-side step that can drive real input. */
 type Check =
@@ -151,6 +163,177 @@ const workspaceChecks: Record<string, Check> = {
         && document.querySelector('[data-testid="chat"]').textContent.includes('Stopped'), 10000)
     })()`)
   },
+  'agent edits land on disk and wait for review': async (win, page) => {
+    await say(win, page, 'touch hunks.txt a\\nb\\nc\\nd\\ne\\n')
+    return page(`__lg.waitFor(() => document.querySelector('[data-testid="changes-bar"]')
+      && window.lookingglass.review.list().then((l) => l.some((e) => e.path === 'hunks.txt' && e.status === 'added')), 10000)`)
+  },
+  'keep all accepts every change': `(async () => {
+    __lg.click('[data-testid="accept-all"]')
+    return __lg.waitFor(() => !document.querySelector('[data-testid="changes-bar"]'))
+  })()`,
+  'per-hunk undo and keep': async (win, page) => {
+    await say(win, page, 'write hunks.txt A\\nb\\nc\\nd\\nE\\n')
+    return page(`(async () => {
+      const read = () => window.lookingglass.fs.readFile('hunks.txt').then((f) => f.contents)
+      await __lg.waitFor(() => document.querySelector('[data-testid="changes-bar"]'), 10000)
+      __lg.click('[data-testid="changes-bar"] button')
+      await __lg.waitFor(() => document.querySelector('[data-testid="change-entry"][data-path="hunks.txt"]'))
+      __lg.click('[data-testid="change-entry"][data-path="hunks.txt"]')
+      const hunks = () => document.querySelectorAll('[data-testid="review-view"] [data-testid="hunk-actions"]')
+      if (!await __lg.waitFor(() => hunks().length === 2)) return console.log('hunks=' + hunks().length) || false
+      hunks()[0].querySelector('[data-testid="hunk-reject"]').click()
+      if (!await __lg.waitFor(async () => (await read()) === 'a\\nb\\nc\\nd\\nE\\n' && hunks().length === 1)) return false
+      hunks()[0].querySelector('[data-testid="hunk-accept"]').click()
+      return __lg.waitFor(async () => !document.querySelector('[data-testid="changes-bar"]') && (await read()) === 'a\\nb\\nc\\nd\\nE\\n')
+    })()`)
+  },
+  'restore puts files back to before a message': async (win, page) => {
+    await say(win, page, 'write README.md replaced by agent')
+    return page(`(async () => {
+      const read = () => window.lookingglass.fs.readFile('README.md').then((f) => f.contents)
+      await __lg.waitFor(async () => (await read()) === 'replaced by agent', 10000)
+      await __lg.waitFor(() => document.querySelector('[data-testid="chat"][data-busy="false"]'))
+      window.confirm = () => true
+      ;[...document.querySelectorAll('[data-testid="restore-checkpoint"]')].at(-1).click()
+      return __lg.waitFor(async () => (await read()) === '# Smoke fixture\\n', 10000)
+    })()`)
+  },
+  'agent commands run in a visible terminal': async (win, page) => {
+    await say(win, page, 'run echo agent-$((1+1))')
+    return page(`__lg.waitFor(() => [...document.querySelectorAll('[data-testid="agent-message"]')]
+      .some((m) => m.textContent.includes('Exit 0. Output: agent-2'))
+      && document.body.textContent.includes('Fake agent (testing): echo'), 15000)`)
+  },
+  '@-mentions attach files': async (win, page) => {
+    await page(`__lg.waitFor(() => document.querySelector('[data-testid="chat"][data-busy="false"] [data-testid="composer"]:not(:disabled)'))
+      .then(() => document.querySelector('[data-testid="composer"]').focus())`)
+    win.webContents.insertText('@app')
+    const found = await page(
+      `__lg.waitFor(() => document.querySelector('[data-testid="mention-option"][data-label="src/app.ts"]'))`,
+    )
+    if (!found) return false
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' })
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' })
+    await page(`__lg.waitFor(() => document.querySelector('[data-testid="attachment"]'))`)
+    win.webContents.insertText('what is this')
+    await page(`__lg.click('[data-testid="send"]')`)
+    return page(`__lg.waitFor(() => [...document.querySelectorAll('[data-testid="agent-message"]')]
+      .some((m) => m.textContent.includes('what is this @app.ts')), 10000)`)
+  },
+  'review tab shows the diff with hunk actions': async (win, page) => {
+    await say(
+      win,
+      page,
+      'write src/app.ts export const greeting = "hi"\\nconsole.log(greeting)\\nconsole.log("done")\\n',
+    )
+    return page(`(async () => {
+      await __lg.waitFor(() => document.querySelector('[data-testid="changes-bar"]'), 10000)
+      if (!document.querySelector('[data-testid="change-entry"]')) __lg.click('[data-testid="changes-bar"] button')
+      await __lg.waitFor(() => document.querySelector('[data-testid="change-entry"][data-path="src/app.ts"]'))
+      __lg.click('[data-testid="change-entry"][data-path="src/app.ts"]')
+      return __lg.waitFor(() => {
+        const view = document.querySelector('[data-testid="review-view"][data-path="src/app.ts"]')
+        return view && __lg.deepText(view).includes('console.log("done")') && view.querySelectorAll('[data-testid="hunk-actions"]').length >= 1
+      }, 10000)
+    })()`)
+  },
+  'dev server URL in the terminal opens a browser tab': async (win, page) => {
+    const site = process.env['LOOKINGGLASS_SMOKE_SITE']!
+    const id = await page(`document.querySelector('[data-testid="terminal"]')?.dataset.terminalId`)
+    await page(
+      `window.lookingglass.terminal.write(${JSON.stringify(id)}, ${JSON.stringify(`echo "  Local: ${site}"\r`)})`,
+    )
+    return page(`(async () => {
+      await __lg.waitFor(() => document.querySelector('[data-testid="open-detected-url"]'), 10000)
+      __lg.click('[data-testid="open-detected-url"]')
+      return __lg.waitFor(() => [...document.querySelectorAll('[data-testid="editor-tab"]')].some((t) => t.textContent.includes('Smoke site')), 15000)
+    })()`)
+  },
+  'browser console captures errors and failed requests': `__lg.waitFor(() => {
+    const n = Number(document.querySelector('[data-testid="console-errors"]')?.textContent.replace(/\\D/g, ''))
+    return n >= 2
+  }, 10000)`,
+  'element picker collects element context': async (win, page) => {
+    const contents = browserContents()
+    if (!contents) return false
+    await page(`__lg.click('[data-testid="picker-toggle"]')`)
+    await new Promise((r) => setTimeout(r, 300))
+    const point = (await contents.executeJavaScript(
+      `(() => { const r = document.querySelector('[data-testid="cta"]').getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } })()`,
+    )) as { x: number; y: number }
+    contents.sendInputEvent({ type: 'mouseMove', x: point.x, y: point.y })
+    await new Promise((r) => setTimeout(r, 100))
+    contents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: 1 })
+    contents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: 1 })
+    const ok = await page(
+      `__lg.waitFor(() => document.querySelector('[data-testid="picked-label"]')?.textContent.includes('<button.cta>'), 10000)`,
+    )
+    const first = browser.selection()[0]
+    const picked = first?.kind === 'element' ? first : undefined
+    console.log(
+      `[smoke]      picked ${picked?.selector} rules=${JSON.stringify(picked?.rules.map((r) => r.source))} sources=${JSON.stringify(picked?.sources)}`,
+    )
+    return (
+      ok &&
+      picked?.rules.some((r) => r.source?.startsWith('site/styles.css')) &&
+      picked.screenshot &&
+      picked.sources.length > 0
+    )
+  },
+  'asking about an element sends it to the agent': async (win, page) => {
+    await page(`document.querySelector('[data-testid="ask-element"]').focus()`)
+    win.webContents.insertText('why is this blue')
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' })
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' })
+    return page(`__lg.waitFor(() => [...document.querySelectorAll('[data-testid="agent-message"]')]
+      .some((m) => m.textContent.includes('why is this blue') && m.textContent.includes('[data-testid')), 10000)`)
+  },
+  'agents can drive the browser through MCP tools': async (_win, page) => {
+    const handle = editorMcp()
+    if (!handle) return false
+    const client = new Client({ name: 'smoke', version: '1.0.0' })
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(handle.url), {
+        requestInit: { headers: Object.fromEntries(handle.headers.map((h) => [h.name, h.value])) },
+      }),
+    )
+    try {
+      const toolText = async (name: string, args: Record<string, unknown> = {}): Promise<string> => {
+        const result = (await client.callTool({ name, arguments: args })) as {
+          content: Array<{ type: string; text?: string }>
+        }
+        return result.content
+          .filter((c) => c.type === 'text')
+          .map((c) => c.text)
+          .join('\n')
+      }
+      const tools = (await client.listTools()).tools.map((t) => t.name)
+      if (!tools.includes('browser_snapshot') || !tools.includes('get_open_editors')) return false
+      const snapshot = await toolText('browser_snapshot')
+      const ref = /button "Get started" \[ref=(\d+)\]/.exec(snapshot)?.[1]
+      if (!ref) return console.log(snapshot.slice(0, 800)) ?? false
+      const banner = page(`__lg.waitFor(() => document.querySelector('[data-testid="agent-banner"]'), 5000)`)
+      await toolText('browser_click', { ref: Number(ref) })
+      const contents = browserContents()
+      const clicked = await new Promise<boolean>((resolve) => {
+        const end = Date.now() + 5000
+        const poll = (): void => {
+          if (contents?.getTitle() === 'clicked') return resolve(true)
+          if (Date.now() > end) return resolve(false)
+          setTimeout(poll, 100)
+        }
+        poll()
+      })
+      const selection = await toolText('browser_get_selection')
+      const errors = await toolText('browser_console', { errorsOnly: true })
+      return (
+        clicked && (await banner) && selection.includes('Selector:') && errors.includes('smoke page error')
+      )
+    } finally {
+      await client.close()
+    }
+  },
   'path traversal is refused': `window.lookingglass.fs.readFile('../outside.txt').then(() => false, () => true)`,
   'search finds matches': `window.lookingglass.search.run({ pattern: 'greeting' })
     .then((r) => r.files.some((f) => f.path === 'src/app.ts') && r.matchCount >= 2)`,
@@ -210,6 +393,30 @@ const claudeChecks: Record<string, Check> = {
     await say(win, page, 'Reply with exactly: lookingglass-ok')
     return page(`__lg.waitFor(() => [...document.querySelectorAll('[data-testid="agent-message"]')]
       .some((m) => m.textContent.includes('lookingglass-ok')), 90000)`)
+  },
+  'Claude Code edits are put up for review': async (win, page) => {
+    await say(
+      win,
+      page,
+      'Create a file named probe.txt containing exactly the text ok, then run the shell command `cat probe.txt`. Do nothing else.',
+    )
+    // Approve whatever it asks for until the turn ends.
+    return page(`(async () => {
+      const end = Date.now() + 150000
+      while (Date.now() < end) {
+        const allow = document.querySelector('[data-testid="permission-option"][data-option-id]')
+        const options = [...document.querySelectorAll('[data-testid="permission-option"]')]
+        const pick = options.find((o) => /allow|yes|proceed/i.test(o.textContent) && !/always/i.test(o.textContent)) ?? allow
+        if (pick) pick.click()
+        if (document.querySelector('[data-testid="chat"][data-busy="false"]')) break
+        await new Promise((r) => setTimeout(r, 300))
+      }
+      const list = await window.lookingglass.review.list()
+      const disk = await window.lookingglass.fs.readFile('probe.txt').then((f) => f.contents, () => null)
+      console.log('claude review=' + JSON.stringify(list) + ' disk=' + JSON.stringify(disk)
+        + ' agentTerminal=' + document.body.textContent.includes('Claude Code: '))
+      return list.some((e) => e.path === 'probe.txt') && disk?.trim() === 'ok'
+    })()`)
   },
 }
 

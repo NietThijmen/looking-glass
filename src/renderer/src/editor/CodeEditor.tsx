@@ -3,6 +3,7 @@ import { File, Virtualizer, type FileOptions } from '@pierre/diffs/react'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useEditor, type Buffer, type RevealTarget } from '../store/editor'
 import { baseOptions } from './diffsConfig'
+import { registerEditor } from './selection'
 
 const fileOptions: FileOptions<undefined, undefined> = baseOptions
 
@@ -14,6 +15,8 @@ export function CodeEditor({ path, buffer }: { path: string; buffer: Buffer }) {
   const setDraft = useEditor((s) => s.setDraft)
   const pendingReveal = useEditor((s) => (s.reveal?.path === path ? s.reveal : null))
   const editorRef = useRef<Editor<'file'> | null>(null)
+  const unregisterRef = useRef<(() => void) | null>(null)
+  useEffect(() => () => unregisterRef.current?.(), [])
 
   // The file and key only change when the buffer is replaced from disk, so an
   // edit session (and its undo history) survives re-renders and tab switches.
@@ -24,6 +27,8 @@ export function CodeEditor({ path, buffer }: { path: string; buffer: Buffer }) {
     () => ({
       onAttach: (editor: Editor<'file'>) => {
         editorRef.current = editor
+        unregisterRef.current?.()
+        unregisterRef.current = registerEditor(path, editor)
         // Attach fires before the editable content is in the DOM; focusing now is a no-op.
         requestAnimationFrame(() => {
           if (editorRef.current !== editor) return

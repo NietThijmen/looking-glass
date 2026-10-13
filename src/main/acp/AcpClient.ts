@@ -5,6 +5,7 @@ import {
   PROTOCOL_VERSION,
   type ClientConnection,
   type ContentBlock,
+  type CreateTerminalRequest,
   type InitializeResponse,
   type McpServer,
   type NewSessionResponse,
@@ -13,10 +14,13 @@ import {
   type RequestPermissionRequest,
   type RequestPermissionResponse,
   type SessionNotification,
+  type TerminalExitStatus,
+  type TerminalOutputResponse,
   type WriteTextFileRequest,
 } from '@agentclientprotocol/sdk'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { Readable, Writable } from 'node:stream'
+import { childEnv } from '../childEnv'
 
 export interface AgentProcessSpec {
   command: string
@@ -32,6 +36,13 @@ export interface AcpClientHost {
   requestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse>
   onSessionUpdate(notification: SessionNotification): void
   onExit(error: Error | null): void
+  terminal: {
+    create(params: CreateTerminalRequest): Promise<string>
+    output(terminalId: string): TerminalOutputResponse
+    waitForExit(terminalId: string): Promise<TerminalExitStatus>
+    kill(terminalId: string): void
+    release(terminalId: string): void
+  }
 }
 
 const STDERR_LINES = 200
@@ -59,7 +70,7 @@ export class AcpClient {
   async start(): Promise<InitializeResponse> {
     const child = spawn(this.spec.command, this.spec.args, {
       cwd: this.spec.cwd,
-      env: { ...process.env, ...this.spec.env },
+      env: childEnv(this.spec.env),
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     this.#child = child
@@ -96,6 +107,21 @@ export class AcpClient {
     this.#connection = client({ name: 'lookingglass' })
       .onNotification(methods.client.session.update, (ctx) => this.host.onSessionUpdate(ctx.params))
       .onRequest(methods.client.session.requestPermission, (ctx) => this.host.requestPermission(ctx.params))
+      .onRequest(methods.client.terminal.create, async (ctx) => ({
+        terminalId: await this.host.terminal.create(ctx.params),
+      }))
+      .onRequest(methods.client.terminal.output, (ctx) => this.host.terminal.output(ctx.params.terminalId))
+      .onRequest(methods.client.terminal.waitForExit, (ctx) =>
+        this.host.terminal.waitForExit(ctx.params.terminalId),
+      )
+      .onRequest(methods.client.terminal.kill, (ctx) => {
+        this.host.terminal.kill(ctx.params.terminalId)
+        return {}
+      })
+      .onRequest(methods.client.terminal.release, (ctx) => {
+        this.host.terminal.release(ctx.params.terminalId)
+        return {}
+      })
       .onRequest(methods.client.fs.readTextFile, async (ctx) => ({
         content: await this.host.readTextFile(ctx.params),
       }))
@@ -109,8 +135,7 @@ export class AcpClient {
       protocolVersion: PROTOCOL_VERSION,
       clientCapabilities: {
         fs: { readTextFile: true, writeTextFile: true },
-        // Terminals arrive in Phase 3.
-        terminal: false,
+        terminal: true,
       },
       clientInfo: { name: 'lookingglass', title: 'Lookingglass', version: '0.0.1' },
     })

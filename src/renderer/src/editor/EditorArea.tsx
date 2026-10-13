@@ -1,11 +1,18 @@
 import { basename } from '../lib/paths'
 import { isDirty, useEditor, type Tab } from '../store/editor'
 import { CodeEditor } from './CodeEditor'
+import { BrowserTab } from '../browser/BrowserTab'
+import { ReviewView } from '../review/ReviewView'
+import { useBrowser } from '../store/browser'
+import { useReview } from '../store/review'
 import { GitDiffView } from './GitDiffView'
 
 function TabLabel({ tab }: { tab: Tab }) {
   const dirty = useEditor((s) => isDirty(s.buffers[tab.path]))
   const active = useEditor((s) => s.activeId === tab.id)
+  const browserTitle = useBrowser((s) =>
+    tab.kind === 'browser' ? s.tabs[tab.path]?.title || s.tabs[tab.path]?.url : undefined,
+  )
   const { activate, closeTab } = useEditor.getState()
   return (
     <div
@@ -24,7 +31,11 @@ function TabLabel({ tab }: { tab: Tab }) {
       }`}
     >
       {tab.kind === 'diff' && <span className="text-accent">±</span>}
-      <span className="truncate">{basename(tab.path)}</span>
+      {tab.kind === 'review' && <span className="text-amber-300">✦</span>}
+      {tab.kind === 'browser' && <span>🌐</span>}
+      <span className="truncate">
+        {tab.kind === 'browser' ? browserTitle || 'New tab' : basename(tab.path)}
+      </span>
       <button
         aria-label="Close tab"
         onMouseDown={(e) => e.stopPropagation()}
@@ -42,12 +53,36 @@ function TabLabel({ tab }: { tab: Tab }) {
   )
 }
 
+export function openBrowserTab(): void {
+  void useEditor.getState().openBrowser(useBrowser.getState().detectedUrls[0] ?? 'about:blank')
+}
+
+function NewBrowserTabButton({ labelled = false }: { labelled?: boolean }) {
+  return (
+    <button
+      data-testid="new-browser-tab"
+      title="New browser tab (⇧⌘B)"
+      onClick={openBrowserTab}
+      className={
+        labelled
+          ? 'rounded border border-border px-3 py-1 hover:bg-white/5'
+          : 'shrink-0 px-3 text-muted hover:text-fg'
+      }
+    >
+      🌐{labelled ? ' Open browser' : ''}
+    </button>
+  )
+}
+
 function ActiveTab({ tab }: { tab: Tab }) {
   const buffer = useEditor((s) => s.buffers[tab.path])
   const error = useEditor((s) => s.errors[tab.path])
   const { reloadFromDisk } = useEditor.getState()
+  const underReview = useReview((s) => s.entries.some((e) => e.path === tab.path))
 
   if (tab.kind === 'diff') return <GitDiffView path={tab.path} />
+  if (tab.kind === 'review') return <ReviewView path={tab.path} />
+  if (tab.kind === 'browser') return <BrowserTab tabId={tab.path} />
   if (error)
     return (
       <div className="p-4 text-red-400">
@@ -60,6 +95,23 @@ function ActiveTab({ tab }: { tab: Tab }) {
 
   return (
     <div className="flex h-full flex-col">
+      {underReview && (
+        <div
+          data-testid="review-banner"
+          className="flex items-center gap-3 border-b border-border bg-amber-400/5 px-3 py-1.5 text-amber-200"
+        >
+          An agent changed this file.
+          <button className="underline" onClick={() => useEditor.getState().openReview(tab.path)}>
+            Review changes
+          </button>
+          <button className="underline" onClick={() => void window.lookingglass.review.accept(tab.path)}>
+            Keep
+          </button>
+          <button className="underline" onClick={() => void window.lookingglass.review.reject(tab.path)}>
+            Undo
+          </button>
+        </div>
+      )}
       {buffer.conflict && (
         <div className="flex items-center gap-3 border-b border-border bg-amber-500/10 px-3 py-1.5 text-amber-200">
           This file changed on disk and you have unsaved edits.
@@ -86,7 +138,12 @@ export function EditorArea() {
         <div className="text-center">
           <div className="text-lg text-fg">Lookingglass</div>
           <div className="mt-1">Open a file from the explorer.</div>
-          <div className="mt-4 font-mono text-[11px]">⌘O open folder · ⇧⌘F search · ⌃` terminal</div>
+          <div className="mt-4 font-mono text-[11px]">
+            ⌘O open folder · ⇧⌘F search · ⌃` terminal · ⇧⌘B browser
+          </div>
+          <div className="mt-3">
+            <NewBrowserTabButton labelled />
+          </div>
         </div>
       </div>
     )
@@ -98,6 +155,7 @@ export function EditorArea() {
         {tabs.map((tab) => (
           <TabLabel key={tab.id} tab={tab} />
         ))}
+        <NewBrowserTabButton />
       </div>
       <div className="min-h-0 flex-1">{active && <ActiveTab key={active.id} tab={active} />}</div>
     </div>

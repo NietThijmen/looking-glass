@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import type { FsChange } from '../../../shared/ipc'
 
-export type TabKind = 'file' | 'diff'
+/** file = editor, diff = against git HEAD, review = agent changes against their review baseline. */
+export type TabKind = 'file' | 'diff' | 'review' | 'browser'
 
 export interface Tab {
   id: string
@@ -40,6 +41,10 @@ interface EditorStore {
 
   openFile(path: string, reveal?: { line: number; column: number }): Promise<void>
   openDiff(path: string): Promise<void>
+  openReview(path: string): void
+  /** Browser tabs use their browser tab id as `path`. */
+  openBrowser(url: string): Promise<void>
+  adoptBrowser(tabId: string): void
   activate(id: string): void
   closeTab(id: string): void
   setDraft(path: string, draft: string): void
@@ -111,11 +116,26 @@ export const useEditor = create<EditorStore>((set, get) => {
       await ensureBuffer(path).catch(() => undefined)
     },
 
+    openReview(path) {
+      openTab('review', path)
+    },
+
+    async openBrowser(url) {
+      const state = await window.lookingglass.browser.create(url)
+      openTab('browser', state.tabId)
+    },
+
+    adoptBrowser(tabId) {
+      openTab('browser', tabId)
+    },
+
     activate(id) {
       set({ activeId: id })
     },
 
     closeTab(id) {
+      const closing = get().tabs.find((t) => t.id === id)
+      if (closing?.kind === 'browser') void window.lookingglass.browser.close(closing.path)
       set((s) => {
         const index = s.tabs.findIndex((t) => t.id === id)
         if (index === -1) return s

@@ -11,6 +11,8 @@ export default defineConfig({
           index: resolve('src/main/index.ts'),
           // Separate process: the scriptable ACP agent used by smoke runs and dev.
           fakeAgent: resolve('src/main/acp/fakeAgent.ts'),
+          // Runs agent scripts with Electron's Node without leaking ELECTRON_RUN_AS_NODE.
+          nodeBootstrap: resolve('src/main/acp/nodeBootstrap.ts'),
         },
       },
     },

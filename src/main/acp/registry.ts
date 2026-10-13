@@ -15,7 +15,12 @@ function electronNode(
   script: string,
   env: Record<string, string> = {},
 ): Pick<AgentDefinition, 'command' | 'args' | 'env'> {
-  return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } }
+  const bootstrap = fileURLToPath(new URL('./nodeBootstrap.js', import.meta.url))
+  return {
+    command: process.execPath,
+    args: [bootstrap, script],
+    env: { ELECTRON_RUN_AS_NODE: '1', ...env },
+  }
 }
 
 function unpacked(p: string): string {

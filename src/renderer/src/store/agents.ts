@@ -1,5 +1,6 @@
 import type { SessionModeState } from '@agentclientprotocol/sdk'
 import { create } from 'zustand'
+import type { PromptCapabilities } from '@agentclientprotocol/sdk'
 import type {
   AgentStatus,
   AgentSummary,
@@ -8,7 +9,7 @@ import type {
   PermissionRequest,
   SessionUpdate,
 } from '../../../shared/agent'
-import { applyUpdate, turnEnd, userItem, type TranscriptItem } from '../agent/transcript'
+import { applyUpdate, notice, turnEnd, userItem, type TranscriptItem } from '../agent/transcript'
 
 export type ChatState = 'starting' | 'auth' | 'ready' | 'error'
 
@@ -22,6 +23,33 @@ export interface Chat {
   items: TranscriptItem[]
   busy: boolean
   modes: SessionModeState | null
+  promptCapabilities: PromptCapabilities
+}
+
+/** Something attached to a message: a chip label plus the content blocks it sends. */
+export interface Attachment {
+  label: string
+  blocks: ContentBlock[]
+  /**
+   * Separately toggleable pieces (e.g. a picked element's markup, styles and
+   * screenshot). When present they replace `blocks`: only ticked parts are sent.
+   */
+  parts?: AttachmentPart[]
+}
+
+export interface AttachmentPart {
+  label: string
+  blocks: ContentBlock[]
+  on: boolean
+  /** Always sent; shown for transparency but can't be unticked. */
+  locked?: boolean
+}
+
+/** The content blocks an attachment sends. */
+export function attachmentBlocks(attachment: Attachment): ContentBlock[] {
+  return attachment.parts
+    ? attachment.parts.filter((p) => p.on || p.locked).flatMap((p) => p.blocks)
+    : attachment.blocks
 }
 
 interface AgentsStore {
@@ -38,7 +66,14 @@ interface AgentsStore {
   retryChat(key: number): Promise<void>
   closeChat(key: number): void
   activate(key: number): void
-  send(key: number, text: string, attachments: ContentBlock[]): Promise<void>
+  send(key: number, text: string, attachments: Attachment[]): Promise<void>
+  restore(key: number, itemId: number): Promise<void>
+  /** Attachments waiting in a chat's composer (e.g. an element picked in the browser). */
+  pending: Record<number, Attachment[]>
+  addPending(attachment: Attachment): Promise<void>
+  takePending(key: number): Attachment[]
+  /** Send to the active chat, or a new one; starts a chat with the default agent if needed. */
+  ask(text: string, attachments: Attachment[], options?: { newChat?: boolean }): Promise<void>
   cancel(key: number): Promise<void>
   setMode(key: number, modeId: string): Promise<void>
   respondPermission(requestId: string, optionId: string | null): void
@@ -69,7 +104,12 @@ export const useAgents = create<AgentsStore>((set, get) => {
       if ('authRequired' in result) {
         patch(key, { state: 'auth', auth: result })
       } else {
-        patch(key, { state: 'ready', sessionId: result.sessionId, modes: result.modes ?? null })
+        patch(key, {
+          state: 'ready',
+          sessionId: result.sessionId,
+          modes: result.modes ?? null,
+          promptCapabilities: result.promptCapabilities,
+        })
       }
     } catch (error) {
       patch(key, { state: 'error', error: error instanceof Error ? error.message : String(error) })
@@ -105,6 +145,7 @@ export const useAgents = create<AgentsStore>((set, get) => {
         items: [],
         busy: false,
         modes: null,
+        promptCapabilities: {},
       }
       set((s) => ({ chats: [...s.chats, chat], activeKey: key, defaultAgentId: id }))
       await startSession(key)
@@ -133,15 +174,57 @@ export const useAgents = create<AgentsStore>((set, get) => {
       if (!chat?.sessionId || chat.busy || (!text.trim() && !attachments.length)) return
       const prompt: ContentBlock[] = [
         ...(text.trim() ? [{ type: 'text' as const, text }] : []),
-        ...attachments,
+        ...attachments.flatMap(attachmentBlocks),
       ]
-      const names = attachments.flatMap((a) => (a.type === 'resource_link' ? [a.name] : []))
-      patch(key, (c) => ({ busy: true, items: [...c.items, userItem(text, names)] }))
+      const user = userItem(
+        text,
+        attachments.map((a) => a.label),
+      )
+      patch(key, (c) => ({ busy: true, items: [...c.items, user] }))
       const result = await window.lookingglass.agent.prompt(chat.sessionId, prompt)
       patch(key, (c) => ({
         busy: false,
-        items: [...c.items, turnEnd(result.stopReason, result.error)],
+        items: [
+          ...c.items.map((i) => (i.id === user.id ? { ...i, checkpoint: result.checkpoint ?? null } : i)),
+          turnEnd(result.stopReason, result.error),
+        ],
       }))
+    },
+
+    pending: {},
+
+    async addPending(attachment) {
+      if (get().activeKey === null) await get().newChat()
+      const key = get().activeKey
+      if (key === null) return
+      set((s) => ({ pending: { ...s.pending, [key]: [...(s.pending[key] ?? []), attachment] } }))
+    },
+
+    takePending(key) {
+      const taken = get().pending[key] ?? []
+      if (taken.length) set((s) => ({ pending: { ...s.pending, [key]: [] } }))
+      return taken
+    },
+
+    async ask(text, attachments, options) {
+      const active = get().chats.find((c) => c.key === get().activeKey)
+      if (options?.newChat || !active || active.state === 'error') await get().newChat()
+      const chat = get().chats.find((c) => c.key === get().activeKey)
+      if (!chat) return
+      if (chat.state !== 'ready' || chat.busy) {
+        // Can't send right now (logging in, or mid-turn): leave it in the composer.
+        for (const a of attachments) await get().addPending(a)
+        return
+      }
+      await get().send(chat.key, text, attachments)
+    },
+
+    async restore(key, itemId) {
+      const chat = get().chats.find((c) => c.key === key)
+      const item = chat?.items.find((i) => i.id === itemId)
+      if (!chat || chat.busy || item?.kind !== 'user' || !item.checkpoint) return
+      await window.lookingglass.review.restore(item.checkpoint)
+      patch(key, (c) => ({ items: [...c.items, notice('Files restored to before this message.')] }))
     },
 
     async cancel(key) {

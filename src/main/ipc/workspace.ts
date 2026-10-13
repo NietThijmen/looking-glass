@@ -1,10 +1,10 @@
 import { BrowserWindow, clipboard, dialog } from 'electron'
-import type { WorkspaceInfo } from '../../shared/ipc'
+import type { FsChange, WorkspaceInfo } from '../../shared/ipc'
 import { isSmokeTest } from '../env'
 import { saveAppState } from '../state/appState'
 import { TerminalService } from '../terminal/TerminalService'
 import { GitService } from '../workspace/git'
-import { SearchService } from '../workspace/search'
+import { listFiles, SearchService } from '../workspace/search'
 import { watchWorkspace } from '../workspace/watcher'
 import { WorkspaceService } from '../workspace/WorkspaceService'
 import { broadcast } from './broadcast'
@@ -20,6 +20,12 @@ export const terminals = new TerminalService({
 
 let stopWatching: (() => Promise<void>) | null = null
 const changeListeners: Array<() => void> = []
+const fsListeners: Array<(changes: FsChange[]) => void> = []
+
+/** Called with batched file changes in the open workspace. */
+export function onWorkspaceFsChange(listener: (changes: FsChange[]) => void): void {
+  fsListeners.push(listener)
+}
 
 /** Called before a different workspace opens or the current one closes. */
 export function onWorkspaceWillChange(listener: () => void): void {
@@ -33,7 +39,10 @@ export async function openWorkspace(root: string): Promise<WorkspaceInfo> {
   stopWatching = null
   try {
     stopWatching = await watchWorkspace(info.root, {
-      onFsChange: (changes) => broadcast('fs:changed', changes),
+      onFsChange: (changes) => {
+        broadcast('fs:changed', changes)
+        for (const listener of fsListeners) listener(changes)
+      },
       onGitChange: () => broadcast('git:changed', null),
     })
   } catch (error) {
@@ -78,6 +87,8 @@ export function registerWorkspaceHandlers(): void {
   handle('fs:readDir', (_e, path) => workspace.readDir(path))
   handle('fs:readFile', (_e, path) => workspace.readFile(path))
   handle('fs:writeFile', (_e, path, contents) => workspace.writeFile(path, contents))
+  handle('fs:listFiles', () => listFiles(requireRoot()))
+  handle('git:diff', () => git.diff(requireRoot()))
 
   handle('search:run', (_e, query) => search.run(requireRoot(), query))
 

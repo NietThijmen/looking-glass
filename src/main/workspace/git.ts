@@ -103,6 +103,15 @@ export class GitService {
     return parsePorcelainV2(output, prefix)
   }
 
+  /** Working tree vs HEAD for the workspace (empty outside a repo or before the first commit). */
+  async diff(root: string): Promise<string> {
+    try {
+      return await git(root, ['diff', 'HEAD', '--no-color', '--', '.'])
+    } catch {
+      return ''
+    }
+  }
+
   /** File contents at HEAD, or null if the file isn't tracked there. */
   async headContents(root: string, relPath: string): Promise<string | null> {
     try {

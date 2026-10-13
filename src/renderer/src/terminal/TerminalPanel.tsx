@@ -1,5 +1,8 @@
 import { FitAddon, init, Terminal } from 'ghostty-web'
 import { useEffect, useRef, useState } from 'react'
+import { useBrowser } from '../store/browser'
+import { useEditor } from '../store/editor'
+import { useUi } from '../store/ui'
 import { useWorkspace } from '../store/workspace'
 import { attachTerminal } from './terminalBus'
 
@@ -151,6 +154,20 @@ export function TerminalPanel() {
     [],
   )
 
+  const detectedUrl = useBrowser((s) => s.detectedUrls[0])
+  const focus = useUi((s) => s.terminalFocus)
+  useEffect(() => {
+    if (!focus) return
+    const match = sessions.find((s) => s.id === focus.id)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reacting to an external request
+    if (match) setActiveKey(match.key)
+    // Only on new requests, not on every session change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus])
+
+  const activeId = sessions.find((s) => s.key === activeKey)?.id ?? null
+  useEffect(() => useUi.getState().setActiveTerminal(activeId), [activeId])
+
   // Start fresh shells in the new folder when the workspace changes.
   useEffect(() => {
     const key = nextKey.current++
@@ -190,6 +207,15 @@ export function TerminalPanel() {
         >
           +
         </button>
+        {detectedUrl && (
+          <button
+            data-testid="open-detected-url"
+            onClick={() => void useEditor.getState().openBrowser(detectedUrl)}
+            className="ml-auto rounded px-2 py-0.5 text-accent hover:bg-white/5"
+          >
+            🌐 Open {detectedUrl.replace(/^https?:\/\//, '')} in browser
+          </button>
+        )}
       </div>
       <div className="relative min-h-0 flex-1">
         {sessions.map((s) => (

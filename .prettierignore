@@ -1,4 +1,5 @@
 out/
+out-smoke/
 dist/
 release/
 pnpm-lock.yaml

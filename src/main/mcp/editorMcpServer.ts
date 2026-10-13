@@ -5,6 +5,7 @@ import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { z } from 'zod'
 import type { GitStatus, WorkspaceInfo } from '../../shared/ipc'
+import { registerBrowserTools, type BrowserToolDeps } from '../browser/browserTools'
 import type { EditorState } from '../editor/EditorState'
 
 export interface EditorMcpDeps {
@@ -12,6 +13,7 @@ export interface EditorMcpDeps {
   editor: EditorState
   gitStatus(): Promise<GitStatus | null>
   openFile(path: string, line?: number): Promise<void>
+  browser?: BrowserToolDeps
 }
 
 export interface EditorMcpHandle {
@@ -66,6 +68,7 @@ function buildServer(deps: EditorMcpDeps): McpServer {
       return text(`Opened ${path}${line ? `:${line}` : ''}`)
     },
   )
+  if (deps.browser) registerBrowserTools(server, deps.browser)
   return server
 }
 

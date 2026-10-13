@@ -1,11 +1,19 @@
+import { app } from 'electron'
+import os from 'node:os'
+import path from 'node:path'
 import { AgentManager } from '../acp/AgentManager'
 import { loadAgentDefinitions } from '../acp/registry'
 import { EditorState } from '../editor/EditorState'
 import { startEditorMcpServer, type EditorMcpHandle } from '../mcp/editorMcpServer'
+import { isSmokeTest } from '../env'
 import { PermissionService } from '../permissions/PermissionService'
+import { Checkpoints } from '../review/Checkpoints'
+import { ReviewService } from '../review/ReviewService'
+import { AgentTerminals } from '../terminal/AgentTerminals'
 import { broadcast } from './broadcast'
+import { browserToolDeps } from './browser'
 import { handle } from './typed'
-import { git, onWorkspaceWillChange, terminals, workspace } from './workspace'
+import { git, onWorkspaceFsChange, onWorkspaceWillChange, terminals, workspace } from './workspace'
 
 const editor = new EditorState()
 const permissions = new PermissionService(
@@ -13,6 +21,26 @@ const permissions = new PermissionService(
   (requestId) => broadcast('agent:permissionResolved', { requestId }),
 )
 let mcp: EditorMcpHandle | null = null
+/** The built-in MCP server's address (for smoke tests that call its tools directly). */
+export const editorMcp = (): EditorMcpHandle | null => mcp
+
+// Shadow repos for checkpoints; smoke runs use throwaway fixtures, so keep theirs out of userData.
+const checkpointDir = (): string =>
+  isSmokeTest
+    ? path.join(os.tmpdir(), 'lookingglass-smoke-checkpoints')
+    : path.join(app.getPath('userData'), 'checkpoints')
+let checkpoints: Checkpoints | null = null
+const currentCheckpoints = (): Checkpoints | null => {
+  const root = workspace.root
+  if (!root) return null
+  if (checkpoints?.root !== root) checkpoints = new Checkpoints(root, checkpointDir())
+  return checkpoints
+}
+
+export const review = new ReviewService(workspace, currentCheckpoints, (entries) =>
+  broadcast('review:changed', entries),
+)
+const agentTerminals = new AgentTerminals(terminals, (info) => broadcast('terminal:opened', info))
 
 export const agents = new AgentManager({
   definitions: loadAgentDefinitions,
@@ -22,6 +50,9 @@ export const agents = new AgentManager({
   mcp: () => mcp,
   onStatus: (agentId, status) => broadcast('agent:status', { agentId, status }),
   onSessionUpdate: ({ sessionId, update }) => broadcast('agent:update', { sessionId, update }),
+  review,
+  terminals: agentTerminals,
+  onAgentWrite: (path) => broadcast('editor:reloadFile', { path }),
 })
 
 export async function startAgentServices(): Promise<void> {
@@ -30,6 +61,7 @@ export async function startAgentServices(): Promise<void> {
       workspace: () => workspace.info,
       editor,
       gitStatus: async () => (workspace.root ? git.status(workspace.root) : null),
+      browser: browserToolDeps,
       openFile: async (path, line) => {
         await workspace.resolve(path)
         broadcast('editor:openFile', { path, ...(line ? { line } : {}) })
@@ -42,7 +74,9 @@ export async function startAgentServices(): Promise<void> {
   onWorkspaceWillChange(() => {
     agents.disposeAll()
     editor.reset()
+    review.reset()
   })
+  onWorkspaceFsChange(() => review.notifyFsChange())
 }
 
 export async function stopAgentServices(): Promise<void> {
@@ -62,6 +96,14 @@ export function registerAgentHandlers(): void {
   handle('agent:cancel', (_e, sessionId) => agents.cancel(sessionId))
   handle('agent:setMode', (_e, sessionId, modeId) => agents.setMode(sessionId, modeId))
   handle('agent:respondPermission', (_e, requestId, reply) => permissions.respond(requestId, reply))
+  handle('review:list', () => review.entries())
+  handle('review:base', (_e, path) => review.base(path) ?? null)
+  handle('review:accept', (_e, path) => review.accept(path))
+  handle('review:reject', (_e, path) => review.reject(path))
+  handle('review:setBase', (_e, path, content) => review.setBase(path, content))
+  handle('review:writeCurrent', (_e, path, content) => review.writeCurrent(path, content))
+  handle('review:restore', (_e, checkpoint) => review.restore(checkpoint))
+
   handle('agent:startTerminalAuth', async (_e, agentId, methodId) => {
     const command = await agents.terminalAuthCommand(agentId, methodId)
     const info = terminals.create(workspace.root, { cols: 100, rows: 30 }, command)

@@ -89,6 +89,57 @@ export function collectRgLine(line: string, files: Map<string, SearchFileResult>
   return data.submatches.length || 1
 }
 
+const MAX_LISTED_FILES = 50_000
+
+/** Every workspace file ripgrep would search (gitignore respected), relative and sorted. */
+export function listFiles(root: string): Promise<string[]> {
+  return new Promise((resolve) => {
+    const child = spawn(rgPath, ['--files', '--hidden', '--glob', '!.git'], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    const files: string[] = []
+    const lines = readline.createInterface({ input: child.stdout! })
+    lines.on('line', (line) => {
+      if (files.length < MAX_LISTED_FILES) files.push(line.replace(/^\.\//, ''))
+      else child.kill()
+    })
+    child.on('error', () => resolve([]))
+    child.on('close', () => resolve(files.sort()))
+  })
+}
+
+const SOURCE_EXCLUDES = [
+  '!node_modules',
+  '!dist',
+  '!build',
+  '!out',
+  '!.next',
+  '!coverage',
+  '!*.min.*',
+  '!*.map',
+  '!*.lock',
+  '!*-lock.*',
+]
+
+/** Files containing `needle` literally, for guessing where page content comes from. */
+export function quickFind(root: string, needle: string, limit = 3): Promise<string[]> {
+  return new Promise((resolve) => {
+    const args = ['--files-with-matches', '--fixed-strings', '--max-count', '1', '--max-filesize', '1M']
+    for (const glob of SOURCE_EXCLUDES) args.push('--glob', glob)
+    args.push('--regexp', needle, '--', '.')
+    const child = spawn(rgPath, args, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] })
+    const files: string[] = []
+    const lines = readline.createInterface({ input: child.stdout! })
+    lines.on('line', (line) => {
+      if (files.length < limit) files.push(line.replace(/^\.\//, ''))
+      if (files.length >= limit) child.kill()
+    })
+    child.on('error', () => resolve([]))
+    child.on('close', () => resolve(files))
+  })
+}
+
 /** Runs one search at a time; starting a new one cancels the previous. */
 export class SearchService {
   #current: ChildProcess | null = null

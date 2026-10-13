@@ -1,10 +1,11 @@
-import type { ContentBlock } from '@agentclientprotocol/sdk'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { basename } from '../lib/paths'
 import { useAgents, type Chat } from '../store/agents'
 import { useEditor } from '../store/editor'
+import { useReview } from '../store/review'
 import { useUi } from '../store/ui'
 import { useWorkspace } from '../store/workspace'
+import { Composer } from './Composer'
 import { TranscriptView } from './TranscriptView'
 
 function PermissionCards({ sessionId }: { sessionId: string }) {
@@ -77,94 +78,77 @@ function AuthView({ chat }: { chat: Chat }) {
   )
 }
 
-function Composer({ chat }: { chat: Chat }) {
-  const [text, setText] = useState('')
-  const [attachActive, setAttachActive] = useState(true)
-  const activeFile = useEditor(
-    (s) => s.tabs.find((t) => t.id === s.activeId && t.kind === 'file')?.path ?? null,
-  )
-  const root = useWorkspace((s) => s.info?.root)
-  const { send, cancel, setMode } = useAgents.getState()
-  const ref = useRef<HTMLTextAreaElement>(null)
-  const ready = chat.state === 'ready'
-
-  useEffect(() => {
-    if (ready) ref.current?.focus()
-  }, [ready, chat.key])
-
-  const submit = (): void => {
-    if (!ready || chat.busy || !text.trim()) return
-    const attachments: ContentBlock[] =
-      attachActive && activeFile && root
-        ? [{ type: 'resource_link', uri: `file://${root}/${activeFile}`, name: activeFile }]
-        : []
-    void send(chat.key, text, attachments)
-    setText('')
-  }
-
+function ChangesBar() {
+  const entries = useReview((s) => s.entries)
+  const [open, setOpen] = useState(false)
+  if (!entries.length) return null
+  const statusColor = {
+    added: 'text-emerald-400',
+    modified: 'text-amber-300',
+    deleted: 'text-red-400',
+  } as const
   return (
-    <div className="border-t border-border p-2">
-      {activeFile && (
-        <button
-          title="Attach the active file to your message"
-          onClick={() => setAttachActive((v) => !v)}
-          className={`mb-1.5 rounded border px-1.5 py-0.5 text-[11px] ${
-            attachActive ? 'border-accent/50 text-fg' : 'border-border text-muted line-through'
-          }`}
-        >
-          📎 {basename(activeFile)}
+    <div className="border-t border-border bg-panel" data-testid="changes-bar">
+      <div className="flex items-center gap-2 px-2 py-1.5">
+        <button className="flex items-center gap-1 text-[12px]" onClick={() => setOpen((v) => !v)}>
+          <span className="text-[10px] text-muted">{open ? '▾' : '▸'}</span>
+          <span className="text-amber-300">✦</span> {entries.length} {entries.length === 1 ? 'file' : 'files'}{' '}
+          changed
         </button>
-      )}
-      <textarea
-        ref={ref}
-        data-testid="composer"
-        value={text}
-        disabled={!ready}
-        placeholder={ready ? 'Ask anything…  (Enter to send, Shift+Enter for a new line)' : 'Starting agent…'}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-            e.preventDefault()
-            submit()
-          }
-        }}
-        rows={3}
-        className="w-full resize-none rounded border border-border bg-bg px-2 py-1.5 outline-none select-text focus:border-accent disabled:opacity-50"
-      />
-      <div className="mt-1.5 flex items-center gap-2">
-        {chat.modes && chat.modes.availableModes.length > 1 && (
-          <select
-            value={chat.modes.currentModeId}
-            onChange={(e) => void setMode(chat.key, e.target.value)}
-            className="rounded border border-border bg-bg px-1 py-0.5 text-[11px] text-muted outline-none"
-          >
-            {chat.modes.availableModes.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        )}
         <span className="ml-auto" />
-        {chat.busy ? (
-          <button
-            data-testid="stop"
-            onClick={() => void cancel(chat.key)}
-            className="rounded border border-border px-3 py-0.5 hover:bg-white/5"
-          >
-            Stop
-          </button>
-        ) : (
-          <button
-            data-testid="send"
-            disabled={!ready || !text.trim()}
-            onClick={submit}
-            className="rounded bg-accent px-3 py-0.5 text-bg disabled:opacity-40"
-          >
-            Send
-          </button>
-        )}
+        <button
+          data-testid="accept-all"
+          onClick={() => void window.lookingglass.review.accept(null)}
+          className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] text-emerald-300 hover:bg-emerald-500/30"
+        >
+          Keep all
+        </button>
+        <button
+          data-testid="reject-all"
+          onClick={() => void window.lookingglass.review.reject(null)}
+          className="rounded bg-red-500/15 px-2 py-0.5 text-[11px] text-red-300 hover:bg-red-500/25"
+        >
+          Undo all
+        </button>
       </div>
+      {open && (
+        <div className="max-h-48 overflow-auto pb-1">
+          {entries.map((entry) => (
+            <div
+              key={entry.path}
+              data-testid="change-entry"
+              data-path={entry.path}
+              className="group flex h-[22px] cursor-default items-center gap-1.5 px-3 hover:bg-white/5"
+              onClick={() => useEditor.getState().openReview(entry.path)}
+            >
+              <span className={`truncate ${statusColor[entry.status]}`}>{basename(entry.path)}</span>
+              <span className="truncate text-[11px] text-muted">{entry.path}</span>
+              <span className="ml-auto hidden gap-1 group-hover:flex">
+                <button
+                  title="Keep"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void window.lookingglass.review.accept(entry.path)
+                  }}
+                  className="px-1 text-emerald-300"
+                >
+                  ✓
+                </button>
+                <button
+                  title="Undo"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void window.lookingglass.review.reject(entry.path)
+                  }}
+                  className="px-1 text-red-300"
+                >
+                  ✗
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -209,10 +193,15 @@ function ChatView({ chat }: { chat: Chat }) {
           </div>
         )}
         {chat.state === 'auth' && <AuthView chat={chat} />}
-        <TranscriptView items={chat.items} busy={chat.busy} />
+        <TranscriptView
+          items={chat.items}
+          busy={chat.busy}
+          onRestore={(itemId) => void useAgents.getState().restore(chat.key, itemId)}
+        />
         {chat.sessionId && <PermissionCards sessionId={chat.sessionId} />}
         {chat.busy && <div className="text-[11px] text-muted">● working…</div>}
       </div>
+      <ChangesBar />
       <Composer chat={chat} />
     </div>
   )

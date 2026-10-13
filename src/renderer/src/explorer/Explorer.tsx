@@ -1,6 +1,7 @@
 import type { DirEntry } from '../../../shared/ipc'
 import { gitColor, gitLetter } from '../lib/gitColors'
 import { useEditor } from '../store/editor'
+import { useReview } from '../store/review'
 import { useWorkspace } from '../store/workspace'
 
 const INDENT = 12
@@ -8,6 +9,9 @@ const INDENT = 12
 function Row({ entry, depth }: { entry: DirEntry; depth: number }) {
   const expanded = useWorkspace((s) => !!s.expanded[entry.path])
   const status = useWorkspace((s) => s.gitByPath[entry.path])
+  const reviewed = useReview((s) =>
+    s.entries.some((e) => e.path === entry.path || e.path.startsWith(entry.path + '/')),
+  )
   const active = useEditor((s) => s.tabs.find((t) => t.id === s.activeId)?.path === entry.path)
   const isDir = entry.kind === 'dir'
 
@@ -32,6 +36,11 @@ function Row({ entry, depth }: { entry: DirEntry; depth: number }) {
           {isDir ? (expanded ? '▾' : '▸') : ''}
         </span>
         <span className={`truncate ${status ? gitColor[status] : ''}`}>{entry.name}</span>
+        {reviewed && (
+          <span title="Agent changes to review" className="text-[10px] text-amber-300">
+            ✦
+          </span>
+        )}
         {status && !isDir && (
           <span className={`ml-auto pl-2 font-mono text-[10px] ${gitColor[status]}`}>
             {gitLetter[status]}

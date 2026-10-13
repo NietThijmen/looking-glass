@@ -24,7 +24,7 @@ export type PlanState =
   | { type: 'file'; uri: string }
 
 export type TranscriptItem =
-  | { kind: 'user'; id: number; text: string; attachments: string[] }
+  | { kind: 'user'; id: number; text: string; attachments: string[]; checkpoint?: string | null }
   | { kind: 'agent'; id: number; text: string }
   | { kind: 'thought'; id: number; text: string }
   | { kind: 'tool'; id: number; call: ToolCallState }
@@ -150,6 +150,10 @@ export function applyUpdate(items: TranscriptItem[], update: SessionUpdate): Tra
 
 export function userItem(text: string, attachments: string[]): TranscriptItem {
   return { kind: 'user', id: id(), text, attachments }
+}
+
+export function notice(text: string, severity = 'info'): TranscriptItem {
+  return { kind: 'notice', id: id(), severity, text }
 }
 
 export function turnEnd(reason: string, error?: string): TranscriptItem {

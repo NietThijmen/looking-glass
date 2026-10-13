@@ -123,6 +123,22 @@ export class WorkspaceService {
     return { mtimeMs: stat.mtimeMs }
   }
 
+  /** Delete a file. Missing files are fine. */
+  async deleteFile(relPath: string): Promise<void> {
+    const file = await this.resolve(relPath)
+    await fs.rm(file, { force: true })
+  }
+
+  /** Text contents, or null when the file is missing, binary or too large to review. */
+  async readText(relPath: string): Promise<string | null> {
+    try {
+      const file = await this.readFile(relPath)
+      return file.binary || file.tooLarge ? null : file.contents
+    } catch {
+      return null
+    }
+  }
+
   #requireRoot(): string {
     if (!this.#root) throw new WorkspaceError('No workspace open')
     return this.#root

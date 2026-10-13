@@ -7,6 +7,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentStatus, PermissionRequest } from '../../shared/agent'
 import { EditorState } from '../editor/EditorState'
 import { PermissionService } from '../permissions/PermissionService'
+import { Checkpoints } from '../review/Checkpoints'
+import { ReviewService } from '../review/ReviewService'
+import { AgentTerminals } from '../terminal/AgentTerminals'
+import { TerminalService } from '../terminal/TerminalService'
+import type { ReviewEntry } from '../../shared/review'
 import { WorkspaceService } from '../workspace/WorkspaceService'
 import { AgentManager, sliceLines } from './AgentManager'
 import type { AgentDefinition } from './definition'
@@ -27,6 +32,9 @@ let updates: SessionNotification[]
 let prompts: PermissionRequest[]
 let statuses: AgentStatus[]
 let editor: EditorState
+let reviewed: ReviewEntry[]
+let agentWrites: string[]
+let terminalService: TerminalService
 
 async function setup(args: string[] = []) {
   const workspace = new WorkspaceService()
@@ -39,7 +47,19 @@ async function setup(args: string[] = []) {
     (r) => prompts.push(r),
     () => undefined,
   )
+  reviewed = []
+  agentWrites = []
+  const checkpoints = new Checkpoints(tmp, path.join(tmp, '..', `${path.basename(tmp)}-storage`))
+  const review = new ReviewService(
+    workspace,
+    () => checkpoints,
+    (e) => (reviewed = e),
+  )
+  terminalService = new TerminalService({ onData: () => undefined, onExit: () => undefined })
   manager = new AgentManager({
+    review,
+    terminals: new AgentTerminals(terminalService, () => undefined),
+    onAgentWrite: (p) => agentWrites.push(p),
     definitions: async () => [definition(args)],
     workspace,
     editor,
@@ -71,7 +91,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   manager?.disposeAll()
+  terminalService?.killAll()
   await fs.rm(tmp, { recursive: true, force: true })
+  await fs.rm(`${tmp}-storage`, { recursive: true, force: true })
 })
 
 describe('sliceLines', () => {
@@ -90,7 +112,7 @@ describe('AgentManager with the fake agent', () => {
     expect(statuses.at(-1)).toMatchObject({ state: 'ready', agentName: 'Fake agent' })
 
     const result = await manager.prompt(sessionId, [{ type: 'text', text: 'hello' }])
-    expect(result).toEqual({ stopReason: 'end_turn' })
+    expect(result).toMatchObject({ stopReason: 'end_turn' })
     const kinds = updates.map((n) => n.update.sessionUpdate)
     expect(kinds).toEqual(
       expect.arrayContaining(['agent_thought_chunk', 'plan', 'tool_call', 'agent_message_chunk']),
@@ -138,7 +160,7 @@ describe('AgentManager with the fake agent', () => {
     const turn = manager.prompt(sessionId, [{ type: 'text', text: 'slow' }])
     await expect.poll(() => agentText()).toContain('tick 2')
     await manager.cancel(sessionId)
-    await expect(turn).resolves.toEqual({ stopReason: 'cancelled' })
+    await expect(turn).resolves.toMatchObject({ stopReason: 'cancelled' })
   })
 
   it('reports auth_required and recovers after authenticate', async () => {
@@ -147,5 +169,32 @@ describe('AgentManager with the fake agent', () => {
     expect(first).toMatchObject({ authRequired: true, methods: [{ id: 'fake-login' }] })
     await manager.authenticate('fake', 'fake-login')
     expect(await manager.newSession('fake')).toHaveProperty('sessionId')
+  })
+
+  it('applies ACP writes to disk and puts them up for review', async () => {
+    await setup()
+    const sessionId = await newSession()
+    const result = await manager.prompt(sessionId, [
+      { type: 'text', text: 'write README.md agent version\\n' },
+    ])
+    expect(result.checkpoint).toMatch(/^[0-9a-f]{40}$/)
+    expect(await fs.readFile(path.join(tmp, 'README.md'), 'utf8')).toBe('agent version\n')
+    expect(agentWrites).toEqual(['README.md'])
+    expect(reviewed).toEqual([{ path: 'README.md', status: 'modified' }])
+  })
+
+  it('catches files the agent changed with its own tools', async () => {
+    await setup()
+    const sessionId = await newSession()
+    await manager.prompt(sessionId, [{ type: 'text', text: 'touch src/new.ts export {}' }])
+    expect(reviewed).toEqual([{ path: 'src/new.ts', status: 'added' }])
+    expect(agentWrites).toEqual([])
+  })
+
+  it('runs agent commands in terminals and returns plain output', async () => {
+    await setup()
+    const sessionId = await newSession()
+    await manager.prompt(sessionId, [{ type: 'text', text: 'run printf "\\033[31mred\\033[0m-$((6*7))"' }])
+    expect(agentText()).toContain('Exit 0. Output: red-42')
   })
 })
