@@ -5,6 +5,7 @@ import { BrowserTab } from '../browser/BrowserTab'
 import { ReviewView } from '../review/ReviewView'
 import { useBrowser } from '../store/browser'
 import { useReview } from '../store/review'
+import { Diff, Globe, Icon, Sparkles, X, iconSize } from '../ui/icon'
 import { GitDiffView } from './GitDiffView'
 
 function TabLabel({ tab }: { tab: Tab }) {
@@ -30,9 +31,9 @@ function TabLabel({ tab }: { tab: Tab }) {
         active ? 'bg-bg text-fg' : 'text-muted hover:text-fg'
       }`}
     >
-      {tab.kind === 'diff' && <span className="text-accent">±</span>}
-      {tab.kind === 'review' && <span className="text-amber-300">✦</span>}
-      {tab.kind === 'browser' && <span>🌐</span>}
+      {tab.kind === 'diff' && <Icon icon={Diff} className={`${iconSize.sm} text-accent`} />}
+      {tab.kind === 'review' && <Icon icon={Sparkles} className={`${iconSize.sm} text-amber-300`} />}
+      {tab.kind === 'browser' && <Icon icon={Globe} className={iconSize.sm} />}
       <span className="truncate">
         {tab.kind === 'browser' ? browserTitle || 'New tab' : basename(tab.path)}
       </span>
@@ -45,9 +46,9 @@ function TabLabel({ tab }: { tab: Tab }) {
         {dirty ? (
           <span className="size-2 rounded-full bg-fg group-hover:hidden" />
         ) : (
-          <span className="opacity-0 group-hover:opacity-100">×</span>
+          <Icon icon={X} className={`${iconSize.sm} opacity-0 group-hover:opacity-100`} />
         )}
-        {dirty && <span className="hidden group-hover:inline">×</span>}
+        {dirty && <Icon icon={X} className={`${iconSize.sm} hidden group-hover:inline`} />}
       </button>
     </div>
   )
@@ -69,7 +70,10 @@ function NewBrowserTabButton({ labelled = false }: { labelled?: boolean }) {
           : 'shrink-0 px-3 text-muted hover:text-fg'
       }
     >
-      🌐{labelled ? ' Open browser' : ''}
+      <span className="inline-flex items-center gap-1.5">
+        <Icon icon={Globe} className={iconSize.sm} />
+        {labelled ? 'Open browser' : null}
+      </span>
     </button>
   )
 }

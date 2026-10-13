@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Chevron } from '../ui/icon'
 import type { SearchMatch, SearchQuery, SearchResult } from '../../../shared/ipc'
 import { basename, dirname } from '../lib/paths'
 import { useEditor } from '../store/editor'
@@ -114,8 +115,12 @@ export function SearchPanel() {
             .*
           </Toggle>
         </div>
-        <button className="text-[11px] text-muted hover:text-fg" onClick={() => setShowFilters((v) => !v)}>
-          {showFilters ? '▾' : '▸'} files to include / exclude
+        <button
+          className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-fg"
+          onClick={() => setShowFilters((v) => !v)}
+        >
+          <Chevron open={showFilters} />
+          files to include / exclude
         </button>
         {showFilters && (
           <>
@@ -151,7 +156,9 @@ export function SearchPanel() {
               className="flex h-[22px] cursor-default items-center gap-1.5 px-2 hover:bg-white/5"
               onClick={() => setCollapsed((c) => ({ ...c, [file.path]: !c[file.path] }))}
             >
-              <span className="w-3 text-[10px] text-muted">{collapsed[file.path] ? '▸' : '▾'}</span>
+              <span className="flex w-3 items-center justify-center text-muted">
+                <Chevron open={!collapsed[file.path]} />
+              </span>
               <span className="truncate">{basename(file.path)}</span>
               <span className="truncate text-[11px] text-muted">{dirname(file.path)}</span>
               <span className="ml-auto rounded-full bg-border px-1.5 text-[10px] text-muted">

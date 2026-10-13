@@ -2,7 +2,7 @@
 
 > An AI-first code editor in the spirit of Cursor, built on Electron. The difference: **it ships no agent of its own.** It speaks the [Agent Client Protocol (ACP)](https://agentclientprotocol.com), so you can use the agent you already pay for (Claude Code, Codex, or anything else that speaks ACP) inside a full editor.
 
-**Status:** Phases 0 to 3 (skeleton, editor shell, ACP chat, Cursor-style editing) are done. Everything from Phase 4 on is still a plan. See the [Roadmap](#roadmap).
+**Status:** Phases 0–3 (skeleton, editor shell, ACP chat, Cursor-style editing) are done. Phase 4 (browser and element picker) is mostly done; a few UX gaps remain. See the [Roadmap](#roadmap).
 
 ---
 
@@ -492,28 +492,28 @@ lookingglass/
 - [x] Per-turn checkpoints and "restore to before this message"
 - [x] Diffing for agents that write to disk directly (the same checkpoint mechanism)
 - [x] `terminal/*` handlers with agent terminals visible in the panel
-- [x] @-mentions (files, folders, selection, terminal, git diff) and pasted/dropped images. `@problems` waits for diagnostics (LSP bridge, Phase 6)
+- [x] @-mentions (files, folders, selection, terminal, git diff, `@browser`, `@browser-console`) and pasted/dropped images. `@problems` waits for diagnostics (LSP bridge, Phase 6)
 
 ### Phase 4: Browser and element picker
 
-- [ ] Browser tab (`WebContentsView`, own partition, bounds sync, address bar, device sizes, DevTools button)
-- [ ] Dev server URL detection from terminal output
-- [ ] CDP wrapper; console, exception and network error capture with a console panel
-- [ ] Element picker: inspect-mode overlay, multi-select, parent/child walking, region screenshot
-- [ ] Context collection (summary, trimmed markup, matched rules + computed styles, element screenshot) as ACP content blocks, with a chip preview and toggles
-- [ ] "Ask about this element…" popover → active chat / new chat
-- [ ] Source resolution: React/Vue/Svelte metadata, stylesheet source maps, ripgrep guesses
+- [x] Browser tab (`WebContentsView`, own partition, bounds sync, address bar, device sizes, DevTools button)
+- [x] Dev server URL detection from terminal output (plus `previewUrl` in `.lookingglass/settings.json`)
+- [x] CDP wrapper; console, exception and network error capture with a console panel
+- [ ] Element picker: inspect-mode overlay, multi-select, parent/child walking, region screenshot (inspect, Shift+multi-select and ↑ parent are in; drag-to-region and arrow-key / child walk still TODO)
+- [ ] Context collection (summary, trimmed markup, matched rules + computed styles, element screenshot) as ACP content blocks, with a chip preview and toggles (blocks and attachment `parts` exist; composer toggles still TODO)
+- [x] "Ask about this element…" popover → active chat / new chat
+- [x] Source resolution: React/Vue/Svelte metadata, stylesheet source maps, ripgrep guesses (reads `data-lg-source` when present)
 - [ ] `@lookingglass/source-attrs` dev plugin (Vite first)
-- [ ] `browser_*` MCP tools with permission policies, "Agent is using this tab" banner and Stop
+- [x] `browser_*` MCP tools with permission policies, "Agent is using this tab" banner and Stop
 
 ### Phase 5: Multi-agent
 
 - [ ] Codex via `codex-acp`
 - [ ] Gemini CLI
 - [ ] Agent registry UI, including custom agents
-- [ ] Several chats with different agents running at once
+- [x] Several chats with different agents running at once (new-chat picker; each chat keeps its agent for life)
 - [ ] Session history + `session/load`
-- [ ] Mode switching (`session/set_mode`)
+- [x] Mode switching (`session/set_mode`) when the agent reports modes
 
 ### Phase 6: Polish
 
@@ -590,7 +590,8 @@ pnpm package      # installers for the current platform (unsigned for now)
 - **Agent terminals** (`src/main/terminal/AgentTerminals.ts`): `terminal/create` runs the command in a real pty that appears as a tab in the terminal panel; the agent gets plain text (ANSI stripped, tail kept within `outputByteLimit`).
 - **Permissions**: `PermissionService` answers read/search/think requests with the agent's "allow once" option and asks the user for everything else. Stop answers open requests with `cancelled`, as ACP requires.
 - **Login**: if `session/new` fails with `auth_required`, the chat shows the agent's auth methods. Terminal methods run in a Lookingglass terminal tab; the user retries when done.
-- **Editor MCP server**: a Streamable HTTP MCP server on 127.0.0.1 with a random bearer token, passed to every session whose agent supports HTTP MCP. Tools: `get_workspace_info`, `get_open_editors`, `get_git_status`, `open_file`.
+- **Editor MCP server**: a Streamable HTTP MCP server on 127.0.0.1 with a random bearer token, passed to every session whose agent supports HTTP MCP. Tools: `get_workspace_info`, `get_open_editors`, `get_git_status`, `open_file`, and `browser_*` (see `src/main/browser/browserTools.ts`).
+- **Browser**: `BrowserService` (`src/main/browser/`) owns `WebContentsView` tabs in a `persist:lookingglass-browser` partition; the renderer reserves layout and syncs bounds over IPC. Picking uses CDP inspect mode (`elementContext.ts`); dev-server URLs are detected in `terminalBus.ts`. Smoke covers console capture, picking, MCP `browser_snapshot` / `browser_click`, and opening a detected local URL.
 - **Fake agent** (`src/main/acp/fakeAgent.ts`): a scriptable ACP agent used by unit tests and smoke runs, and offered in dev builds. Prompts `read <path>`, `edit`, `slow` and anything else exercise reads, permissions, cancel and streaming.
 - **Real-agent smoke**: `LOOKINGGLASS_SMOKE_CLAUDE=1 pnpm smoke` (or `smoke:packaged`) also runs one real Claude Code turn. It needs a logged-in `claude` and uses a few tokens.
 

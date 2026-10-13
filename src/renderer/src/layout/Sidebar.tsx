@@ -1,13 +1,16 @@
+import type { LucideIcon } from 'lucide-react'
+import { Files, GitBranch, Search } from 'lucide-react'
 import { Explorer } from '../explorer/Explorer'
 import { GitPanel } from '../git/GitPanel'
 import { SearchPanel } from '../search/SearchPanel'
 import { useUi, type SidebarView } from '../store/ui'
 import { useWorkspace } from '../store/workspace'
+import { Icon, iconSize } from '../ui/icon'
 
-const views: Array<{ id: SidebarView; label: string; icon: string; hint: string }> = [
-  { id: 'explorer', label: 'Explorer', icon: '❐', hint: '⇧⌘E' },
-  { id: 'search', label: 'Search', icon: '⌕', hint: '⇧⌘F' },
-  { id: 'git', label: 'Source Control', icon: '⑂', hint: '⌃⇧G' },
+const views: Array<{ id: SidebarView; label: string; icon: LucideIcon; hint: string }> = [
+  { id: 'explorer', label: 'Explorer', icon: Files, hint: '⇧⌘E' },
+  { id: 'search', label: 'Search', icon: Search, hint: '⇧⌘F' },
+  { id: 'git', label: 'Source Control', icon: GitBranch, hint: '⌃⇧G' },
 ]
 
 export function ActivityBar() {
@@ -22,11 +25,11 @@ export function ActivityBar() {
           aria-pressed={current === v.id}
           data-testid={`activity-${v.id}`}
           onClick={() => useUi.getState().showSidebar(v.id)}
-          className={`relative flex size-9 items-center justify-center rounded text-lg ${
+          className={`relative flex size-9 items-center justify-center rounded ${
             current === v.id ? 'text-fg' : 'text-muted hover:text-fg'
           }`}
         >
-          {v.icon}
+          <Icon icon={v.icon} className={iconSize.lg} />
           {v.id === 'git' && changes > 0 && (
             <span className="absolute right-0.5 bottom-0.5 rounded-full bg-accent px-1 text-[9px] leading-tight text-bg">
               {changes > 99 ? '99+' : changes}

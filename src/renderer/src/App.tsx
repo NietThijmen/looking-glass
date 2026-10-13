@@ -1,4 +1,5 @@
 import { EditProvider } from '@pierre/diffs/react'
+import { GitBranch, Icon, iconSize } from './ui/icon'
 import { useEffect, useState } from 'react'
 import type { AppInfo, MenuCommand, WindowState } from '../../shared/ipc'
 import { AgentPanel } from './agent/AgentPanel'
@@ -77,7 +78,7 @@ function useBoot(): boolean {
       api.review.onChanged((entries) => useReview.getState().set(entries)),
       api.browser.onState((state) => useBrowser.getState().setState(state)),
       api.browser.onConsole(({ tabId, entry }) => useBrowser.getState().addConsole(tabId, entry)),
-      api.browser.onPicked((element) => useBrowser.getState().setPicked(element.tabId, element)),
+      api.browser.onPicked(({ item, mode }) => useBrowser.getState().applyPick(item, mode)),
       api.browser.onOpened((state) => {
         useBrowser.getState().setState(state)
         useEditor.getState().adoptBrowser(state.tabId)
@@ -153,7 +154,12 @@ export function App() {
         )}
 
         <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-border bg-panel px-3 font-mono text-[11px] text-muted">
-          {branch && <span>⑂ {branch}</span>}
+          {branch && (
+            <span className="inline-flex items-center gap-1">
+              <Icon icon={GitBranch} className={iconSize.xs} />
+              {branch}
+            </span>
+          )}
           <span className="ml-auto" />
           {info && (
             <>

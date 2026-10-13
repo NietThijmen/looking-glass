@@ -4,6 +4,7 @@ import { useBrowser } from '../store/browser'
 import { useEditor } from '../store/editor'
 import { useUi } from '../store/ui'
 import { useWorkspace } from '../store/workspace'
+import { Globe, Icon, Plus, X, iconSize } from '../ui/icon'
 import { attachTerminal } from './terminalBus'
 
 // Loads and compiles the WASM emulator once for the whole app.
@@ -196,7 +197,7 @@ export function TerminalPanel() {
               }}
               className="opacity-0 group-hover:opacity-100"
             >
-              ×
+              <Icon icon={X} className={iconSize.sm} />
             </button>
           </div>
         ))}
@@ -205,15 +206,16 @@ export function TerminalPanel() {
           onClick={addSession}
           className="rounded px-1.5 text-muted hover:text-fg"
         >
-          +
+          <Icon icon={Plus} className={iconSize.sm} />
         </button>
         {detectedUrl && (
           <button
             data-testid="open-detected-url"
             onClick={() => void useEditor.getState().openBrowser(detectedUrl)}
-            className="ml-auto rounded px-2 py-0.5 text-accent hover:bg-white/5"
+            className="ml-auto inline-flex items-center gap-1 rounded px-2 py-0.5 text-accent hover:bg-white/5"
           >
-            🌐 Open {detectedUrl.replace(/^https?:\/\//, '')} in browser
+            <Icon icon={Globe} className={iconSize.sm} />
+            Open {detectedUrl.replace(/^https?:\/\//, '')} in browser
           </button>
         )}
       </div>

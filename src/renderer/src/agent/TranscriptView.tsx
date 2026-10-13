@@ -1,25 +1,13 @@
 import { MultiFileDiff } from '@pierre/diffs/react'
-import type { PlanEntry, ToolCallContent, ToolKind } from '@agentclientprotocol/sdk'
+import type { ToolCallContent } from '@agentclientprotocol/sdk'
 import { memo, useState } from 'react'
 import { baseOptions } from '../editor/diffsConfig'
 import { useEditor } from '../store/editor'
 import { useUi } from '../store/ui'
 import { useWorkspace } from '../store/workspace'
+import { Chevron, Icon, Paperclip, PlanStatusIcon, RotateCcw, Terminal, iconSize, toolKindIcon } from '../ui/icon'
 import { Markdown } from './Markdown'
 import { blockText, type PlanState, type ToolCallState, type TranscriptItem } from './transcript'
-
-const kindIcon: Record<ToolKind, string> = {
-  read: '📄',
-  edit: '✎',
-  delete: '🗑',
-  move: '↹',
-  search: '⌕',
-  execute: '❯',
-  think: '💭',
-  fetch: '🌐',
-  switch_mode: '⇄',
-  other: '⚙',
-}
 
 const statusStyle: Record<string, string> = {
   pending: 'text-muted',
@@ -78,7 +66,10 @@ function ToolContent({ content }: { content: ToolCallContent }) {
           className="text-[11px] text-accent hover:underline"
           onClick={() => useUi.getState().focusTerminal(content.terminalId)}
         >
-          ❯ Show in terminal panel
+          <span className="inline-flex items-center gap-1">
+            <Icon icon={Terminal} className={iconSize.xs} />
+            Show in terminal panel
+          </span>
         </button>
       )
   }
@@ -97,12 +88,12 @@ function ToolCard({ call }: { call: ToolCallState }) {
         className="flex w-full items-center gap-2 px-2 py-1.5 text-left"
         onClick={() => hasDetails && setOpen((v) => !v)}
       >
-        <span className="w-4 text-center">{kindIcon[call.kind ?? 'other']}</span>
+        <Icon icon={toolKindIcon[call.kind ?? 'other']} className={`${iconSize.sm} text-muted`} />
         <span className="min-w-0 flex-1 truncate">{call.title}</span>
         <span className={`text-[10px] ${statusStyle[call.status ?? 'pending']}`}>
           {call.status === 'in_progress' ? 'running' : (call.status ?? 'pending')}
         </span>
-        {hasDetails && <span className="text-[10px] text-muted">{open ? '▾' : '▸'}</span>}
+        {hasDetails && <Chevron open={open} />}
       </button>
       {open && (
         <div className="space-y-2 border-t border-border px-2 py-2">
@@ -120,8 +111,6 @@ function ToolCard({ call }: { call: ToolCallState }) {
   )
 }
 
-const entryIcon: Record<PlanEntry['status'], string> = { pending: '○', in_progress: '◐', completed: '●' }
-
 function PlanView({ plan }: { plan: PlanState }) {
   return (
     <div className="rounded border border-border bg-panel px-3 py-2" data-testid="plan">
@@ -131,7 +120,7 @@ function PlanView({ plan }: { plan: PlanState }) {
           {plan.entries.map((e, i) => (
             <li key={i} className={`flex gap-2 ${e.status === 'completed' ? 'text-muted line-through' : ''}`}>
               <span className={e.status === 'in_progress' ? 'text-accent' : 'text-muted'}>
-                {entryIcon[e.status]}
+                <PlanStatusIcon status={e.status} />
               </span>
               <span>{e.content}</span>
             </li>
@@ -148,8 +137,12 @@ function Thought({ text }: { text: string }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="text-muted">
-      <button className="text-[11px] italic hover:text-fg" onClick={() => setOpen((v) => !v)}>
-        {open ? '▾' : '▸'} Thinking
+      <button
+        className="inline-flex items-center gap-1 text-[11px] italic hover:text-fg"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Chevron open={open} />
+        Thinking
       </button>
       {open && (
         <div className="mt-1 border-l border-border pl-3 text-[12px] whitespace-pre-wrap select-text">
@@ -190,12 +183,18 @@ const Item = memo(function Item({
               }}
               className="absolute top-1 right-1 hidden rounded px-1.5 text-[10px] text-muted group-hover:block hover:bg-white/10 hover:text-fg"
             >
-              ↺ Restore
+              <span className="inline-flex items-center gap-0.5">
+                <Icon icon={RotateCcw} className={iconSize.xs} />
+                Restore
+              </span>
             </button>
           )}
           <div className="whitespace-pre-wrap select-text">{item.text}</div>
           {item.attachments.length > 0 && (
-            <div className="mt-1 text-[11px] text-muted">📎 {item.attachments.join(', ')}</div>
+            <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted">
+              <Icon icon={Paperclip} className={iconSize.xs} />
+              {item.attachments.join(', ')}
+            </div>
           )}
         </div>
       )

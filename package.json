@@ -46,6 +46,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "ghostty-web": "^0.4.0",
     "globals": "^17.13.0",
+    "lucide-react": "^1.55.0",
     "prettier": "^3.9.10",
     "react": "19.3.0",
     "react-dom": "19.3.0",

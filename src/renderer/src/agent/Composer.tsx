@@ -2,22 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { basename } from '../lib/paths'
 import { useAgents, type Attachment, type Chat } from '../store/agents'
 import { useEditor } from '../store/editor'
+import { AtSign, Icon, Image, Paperclip, X, iconSize, mentionOptionIcon } from '../ui/icon'
 import { imageAttachment, mentionOptions, optionLabel, resolveMention, type MentionOption } from './mentions'
 
 /** `@query` right before the caret, if the user is typing a mention. */
 function mentionQuery(text: string, caret: number): { start: number; query: string } | null {
   const match = /(^|\s)@([^\s@]*)$/.exec(text.slice(0, caret))
   return match ? { start: caret - match[2]!.length - 1, query: match[2]! } : null
-}
-
-const optionIcon: Record<MentionOption['kind'], string> = {
-  file: '📄',
-  folder: '📁',
-  selection: '▭',
-  terminal: '❯',
-  'git-diff': '±',
-  browser: '🌐',
-  'browser-console': '⚠',
 }
 
 export function Composer({ chat }: { chat: Chat }) {
@@ -123,7 +114,7 @@ export function Composer({ chat }: { chat: Chat }) {
               }}
               className={`flex w-full items-center gap-2 px-2 py-1 text-left ${i === highlight ? 'bg-accent/20' : 'hover:bg-white/5'}`}
             >
-              <span className="w-4 text-center text-[11px]">{optionIcon[option.kind]}</span>
+              <Icon icon={mentionOptionIcon[option.kind]} className={`${iconSize.sm} text-muted`} />
               <span className="truncate font-mono text-[12px]">{optionLabel(option)}</span>
             </button>
           ))}
@@ -135,11 +126,12 @@ export function Composer({ chat }: { chat: Chat }) {
           <button
             title="Attach the active file to your message"
             onClick={() => setAttachActive((v) => !v)}
-            className={`rounded border px-1.5 py-0.5 text-[11px] ${
+            className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] ${
               attachActive ? 'border-accent/50 text-fg' : 'border-border text-muted line-through'
             }`}
           >
-            📎 {basename(activeFile)}
+            <Icon icon={Paperclip} className={iconSize.xs} />
+            {basename(activeFile)}
           </button>
         )}
         {attachments.map((a, i) => (
@@ -148,12 +140,17 @@ export function Composer({ chat }: { chat: Chat }) {
             data-testid="attachment"
             className="flex items-center gap-1 rounded border border-accent/50 px-1.5 py-0.5 text-[11px]"
           >
-            {a.blocks[0]?.type === 'image' ? '🖼' : '@'} {a.label}
+            {a.blocks[0]?.type === 'image' ? (
+              <Icon icon={Image} className={iconSize.xs} />
+            ) : (
+              <Icon icon={AtSign} className={iconSize.xs} />
+            )}
+            {a.label}
             <button
               aria-label="Remove"
               onClick={() => setAttachments((list) => list.filter((_, j) => j !== i))}
             >
-              ×
+              <Icon icon={X} className={iconSize.sm} />
             </button>
           </span>
         ))}

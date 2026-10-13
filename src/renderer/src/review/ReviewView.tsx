@@ -2,6 +2,7 @@ import { MultiFileDiff, Virtualizer, type DiffLineAnnotation } from '@pierre/dif
 import { useEffect, useMemo, useState } from 'react'
 import { baseOptions } from '../editor/diffsConfig'
 import { useReview } from '../store/review'
+import { Check, Icon, X, iconSize } from '../ui/icon'
 import { acceptBlock, changeBlocks, rejectBlock, segments } from './hunks'
 
 const diffOptions = { ...baseOptions, diffStyle: 'unified' } as const
@@ -28,16 +29,18 @@ function HunkActions({ onAccept, onReject }: { onAccept(): void; onReject(): voi
       <button
         data-testid="hunk-accept"
         onClick={onAccept}
-        className="rounded bg-emerald-500/20 px-2 text-emerald-300 hover:bg-emerald-500/30"
+        className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 text-emerald-300 hover:bg-emerald-500/30"
       >
-        ✓ Keep
+        <Icon icon={Check} className={iconSize.xs} />
+        Keep
       </button>
       <button
         data-testid="hunk-reject"
         onClick={onReject}
-        className="rounded bg-red-500/15 px-2 text-red-300 hover:bg-red-500/25"
+        className="inline-flex items-center gap-1 rounded bg-red-500/15 px-2 text-red-300 hover:bg-red-500/25"
       >
-        ✗ Undo
+        <Icon icon={X} className={iconSize.xs} />
+        Undo
       </button>
     </div>
   )

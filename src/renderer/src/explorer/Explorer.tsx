@@ -3,6 +3,7 @@ import { gitColor, gitLetter } from '../lib/gitColors'
 import { useEditor } from '../store/editor'
 import { useReview } from '../store/review'
 import { useWorkspace } from '../store/workspace'
+import { Chevron, Icon, Sparkles, iconSize } from '../ui/icon'
 
 const INDENT = 12
 
@@ -32,13 +33,13 @@ function Row({ entry, depth }: { entry: DirEntry; depth: number }) {
           active ? 'bg-accent/15 text-fg' : 'hover:bg-white/5'
         }`}
       >
-        <span className="w-3 shrink-0 text-center text-[10px] text-muted">
-          {isDir ? (expanded ? '▾' : '▸') : ''}
+        <span className="flex w-3 shrink-0 items-center justify-center text-muted">
+          {isDir ? <Chevron open={expanded} /> : null}
         </span>
         <span className={`truncate ${status ? gitColor[status] : ''}`}>{entry.name}</span>
         {reviewed && (
-          <span title="Agent changes to review" className="text-[10px] text-amber-300">
-            ✦
+          <span title="Agent changes to review">
+            <Icon icon={Sparkles} className={`${iconSize.xs} text-amber-300`} />
           </span>
         )}
         {status && !isDir && (

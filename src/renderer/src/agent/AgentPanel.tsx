@@ -5,6 +5,7 @@ import { useEditor } from '../store/editor'
 import { useReview } from '../store/review'
 import { useUi } from '../store/ui'
 import { useWorkspace } from '../store/workspace'
+import { Check, Chevron, Icon, Plus, Sparkles, StatusDot, X, iconSize } from '../ui/icon'
 import { Composer } from './Composer'
 import { TranscriptView } from './TranscriptView'
 
@@ -91,9 +92,9 @@ function ChangesBar() {
     <div className="border-t border-border bg-panel" data-testid="changes-bar">
       <div className="flex items-center gap-2 px-2 py-1.5">
         <button className="flex items-center gap-1 text-[12px]" onClick={() => setOpen((v) => !v)}>
-          <span className="text-[10px] text-muted">{open ? '▾' : '▸'}</span>
-          <span className="text-amber-300">✦</span> {entries.length} {entries.length === 1 ? 'file' : 'files'}{' '}
-          changed
+          <Chevron open={open} />
+          <Icon icon={Sparkles} className={`${iconSize.sm} text-amber-300`} />
+          {entries.length} {entries.length === 1 ? 'file' : 'files'} changed
         </button>
         <span className="ml-auto" />
         <button
@@ -132,7 +133,7 @@ function ChangesBar() {
                   }}
                   className="px-1 text-emerald-300"
                 >
-                  ✓
+                  <Icon icon={Check} className={iconSize.sm} />
                 </button>
                 <button
                   title="Undo"
@@ -142,7 +143,7 @@ function ChangesBar() {
                   }}
                   className="px-1 text-red-300"
                 >
-                  ✗
+                  <Icon icon={X} className={iconSize.sm} />
                 </button>
               </span>
             </div>
@@ -199,7 +200,12 @@ function ChatView({ chat }: { chat: Chat }) {
           onRestore={(itemId) => void useAgents.getState().restore(chat.key, itemId)}
         />
         {chat.sessionId && <PermissionCards sessionId={chat.sessionId} />}
-        {chat.busy && <div className="text-[11px] text-muted">● working…</div>}
+        {chat.busy && (
+          <div className="flex items-center gap-1 text-[11px] text-muted">
+            <StatusDot className="text-accent" />
+            working…
+          </div>
+        )}
       </div>
       <ChangesBar />
       <Composer chat={chat} />
@@ -250,7 +256,7 @@ export function AgentPanel() {
                 chat.key === activeKey ? 'bg-white/10 text-fg' : 'text-muted hover:text-fg'
               }`}
             >
-              {chat.busy && <span className="text-accent">●</span>}
+              {chat.busy && <StatusDot className="text-accent" />}
               <span>
                 {label(chat.agentId)} {i + 1}
               </span>
@@ -262,7 +268,7 @@ export function AgentPanel() {
                 }}
                 className="opacity-0 group-hover:opacity-100"
               >
-                ×
+                <Icon icon={X} className={iconSize.sm} />
               </button>
             </div>
           ))}
@@ -274,7 +280,7 @@ export function AgentPanel() {
           onClick={() => setMenuOpen((v) => !v)}
           className="rounded px-1.5 text-muted hover:text-fg disabled:opacity-40"
         >
-          +
+          <Icon icon={Plus} className={iconSize.sm} />
         </button>
         {menuOpen && <NewChatMenu onClose={() => setMenuOpen(false)} />}
       </div>

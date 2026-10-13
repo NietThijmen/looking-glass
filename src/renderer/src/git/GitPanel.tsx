@@ -3,6 +3,7 @@ import { gitColor, gitLetter } from '../lib/gitColors'
 import { basename, dirname } from '../lib/paths'
 import { useEditor } from '../store/editor'
 import { useWorkspace } from '../store/workspace'
+import { StatusDot } from '../ui/icon'
 
 function Entry({ entry }: { entry: GitStatusEntry }) {
   return (
@@ -19,8 +20,8 @@ function Entry({ entry }: { entry: GitStatusEntry }) {
         {basename(entry.path)}
       </span>
       <span className="truncate text-[11px] text-muted">{dirname(entry.path)}</span>
-      <span className={`ml-auto pl-2 font-mono text-[10px] ${gitColor[entry.status]}`}>
-        {entry.staged ? '●' : ''}
+      <span className={`ml-auto flex items-center gap-1 pl-2 font-mono text-[10px] ${gitColor[entry.status]}`}>
+        {entry.staged ? <StatusDot /> : null}
         {gitLetter[entry.status]}
       </span>
     </div>
