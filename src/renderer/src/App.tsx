@@ -34,6 +34,9 @@ function runMenuCommand(command: MenuCommand): void {
     case 'toggle-terminal':
       ui.toggleTerminal()
       break
+    case 'toggle-sidebar':
+      ui.toggleSidebar()
+      break
     case 'show-explorer':
       ui.showSidebar('explorer')
       break
@@ -131,6 +134,7 @@ export function App() {
   const branch = useWorkspace((s) => s.git?.branch)
   const patchLayout = useUi((s) => s.patchLayout)
   const sidebarWidth = useUi((s) => s.layout.sidebarWidth)
+  const sidebarOpen = useUi((s) => s.layout.sidebarOpen)
 
   useEffect(() => {
     void window.lookingglass.app.getInfo().then(setInfo)
@@ -156,11 +160,13 @@ export function App() {
           <div className="flex min-h-0 flex-1">
             <ActivityBar />
             <Sidebar />
-            <ResizeHandle
-              axis="horizontal"
-              data-testid="resize-sidebar"
-              onDelta={(delta) => patchLayout({ sidebarWidth: sidebarWidth + delta })}
-            />
+            {sidebarOpen && (
+              <ResizeHandle
+                axis="horizontal"
+                data-testid="resize-sidebar"
+                onDelta={(delta) => patchLayout({ sidebarWidth: sidebarWidth + delta })}
+              />
+            )}
             <main className="flex min-w-0 flex-1 flex-col bg-bg">
               <Workbench />
             </main>

@@ -70,6 +70,7 @@ export function installMenu(): void {
         item('show-search'),
         item('show-git'),
         item('show-commits'),
+        item('toggle-sidebar'),
         item('toggle-terminal'),
         { type: 'separator' },
         item('new-browser-tab'),

@@ -28,6 +28,7 @@ export const COMMANDS: CommandInfo[] = [
   { command: 'show-search', label: 'Search', menu: 'View', defaultKey: 'CmdOrCtrl+Shift+F' },
   { command: 'show-git', label: 'Source Control', menu: 'View', defaultKey: 'Ctrl+Shift+G' },
   { command: 'show-commits', label: 'Commits', menu: 'View', defaultKey: 'Ctrl+Shift+H' },
+  { command: 'toggle-sidebar', label: 'Toggle Sidebar', menu: 'View', defaultKey: 'CmdOrCtrl+B' },
   { command: 'toggle-terminal', label: 'Toggle Terminal', menu: 'View', defaultKey: 'Ctrl+`' },
   { command: 'new-browser-tab', label: 'New Browser Tab', menu: 'View', defaultKey: 'CmdOrCtrl+Shift+B' },
   {

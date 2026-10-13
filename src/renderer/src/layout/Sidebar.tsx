@@ -19,16 +19,16 @@ const views: Array<{ id: SidebarView; label: string; icon: LucideIcon; command: 
 ]
 
 function ActivityButton({ view: v, changes }: { view: (typeof views)[number]; changes: number }) {
-  const current = useUi((s) => s.sidebar)
+  const active = useUi((s) => s.layout.sidebarOpen && s.sidebar === v.id)
   const hint = useShortcut(v.command)
   return (
     <button
       title={`${v.label} (${hint})`}
-      aria-pressed={current === v.id}
+      aria-pressed={active}
       data-testid={`activity-${v.id}`}
-      onClick={() => useUi.getState().showSidebar(v.id)}
+      onClick={() => useUi.getState().toggleSidebarView(v.id)}
       className={`relative flex size-9 items-center justify-center rounded ${
-        current === v.id ? 'text-fg' : 'text-muted hover:text-fg'
+        active ? 'text-fg' : 'text-muted hover:text-fg'
       }`}
     >
       <Icon icon={v.icon} className={iconSize.lg} />
@@ -65,9 +65,10 @@ export function ActivityBar() {
 export function Sidebar() {
   const current = useUi((s) => s.sidebar)
   const width = useUi((s) => s.layout.sidebarWidth)
+  const open = useUi((s) => s.layout.sidebarOpen)
   return (
-    <aside style={{ width }} className="shrink-0 border-r border-border bg-panel">
-      {/* Keep panels mounted so search state survives switching views. */}
+    <aside style={{ width }} className={`shrink-0 border-r border-border bg-panel ${open ? '' : 'hidden'}`}>
+      {/* Keep panels mounted so search state survives switching views and closing the sidebar. */}
       <div className={current === 'explorer' ? 'h-full' : 'hidden'}>
         <Explorer />
       </div>

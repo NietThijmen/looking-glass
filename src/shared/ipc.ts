@@ -167,6 +167,7 @@ export type MenuCommand =
   | 'save'
   | 'close-tab'
   | 'toggle-terminal'
+  | 'toggle-sidebar'
   | 'show-explorer'
   | 'show-search'
   | 'show-git'

@@ -5,6 +5,7 @@ export interface WorkbenchLayout {
   agentWidth: number
   browserWidth: number
   sidebarWidth: number
+  sidebarOpen: boolean
   terminalHeight: number
 }
 
@@ -13,6 +14,7 @@ export const DEFAULT_WORKBENCH_LAYOUT: WorkbenchLayout = {
   agentWidth: 384,
   browserWidth: 420,
   sidebarWidth: 256,
+  sidebarOpen: true,
   terminalHeight: 256,
 }
 
@@ -49,6 +51,7 @@ export function normalizeWorkbenchLayout(raw: Partial<WorkbenchLayout> | null | 
       LAYOUT_LIMITS.sidebar.min,
       LAYOUT_LIMITS.sidebar.max,
     ),
+    sidebarOpen: raw?.sidebarOpen ?? base.sidebarOpen,
     terminalHeight: clamp(
       raw?.terminalHeight ?? base.terminalHeight,
       LAYOUT_LIMITS.terminal.min,

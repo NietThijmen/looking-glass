@@ -22,6 +22,9 @@ interface UiStore {
   setActiveTerminal(id: string | null): void
   focusTerminal(id: string): void
   showSidebar(view: SidebarView): void
+  /** Clicking the active view's button closes the sidebar; any other view opens it. */
+  toggleSidebarView(view: SidebarView): void
+  toggleSidebar(): void
   toggleTerminal(): void
   patchLayout(patch: Partial<WorkbenchLayout>): void
   reorderColumns(from: WorkbenchColumn, onto: WorkbenchColumn): void
@@ -37,11 +40,19 @@ export const useUi = create<UiStore>((set, get) => ({
   setActiveTerminal: (id) => set({ activeTerminalId: id }),
   focusTerminal: (id) =>
     set((s) => ({ terminalOpen: true, terminalFocus: { id, token: (s.terminalFocus?.token ?? 0) + 1 } })),
-  showSidebar: (view) =>
+  showSidebar: (view) => {
     set((s) => ({
       sidebar: view,
       searchFocusToken: view === 'search' ? s.searchFocusToken + 1 : s.searchFocusToken,
-    })),
+    }))
+    if (!get().layout.sidebarOpen) get().patchLayout({ sidebarOpen: true })
+  },
+  toggleSidebarView: (view) => {
+    const { sidebar, layout } = get()
+    if (layout.sidebarOpen && sidebar === view) get().patchLayout({ sidebarOpen: false })
+    else get().showSidebar(view)
+  },
+  toggleSidebar: () => get().patchLayout({ sidebarOpen: !get().layout.sidebarOpen }),
   toggleTerminal: () => set((s) => ({ terminalOpen: !s.terminalOpen })),
   patchLayout: (patch) =>
     set((s) => {
