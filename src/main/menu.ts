@@ -40,6 +40,7 @@ export function installMenu(): void {
         command('Explorer', 'CmdOrCtrl+Shift+E', 'show-explorer'),
         command('Search', 'CmdOrCtrl+Shift+F', 'show-search'),
         command('Source Control', 'Ctrl+Shift+G', 'show-git'),
+        command('Commits', 'Ctrl+Shift+H', 'show-commits'),
         command('Toggle Terminal', 'Ctrl+`', 'toggle-terminal'),
         { type: 'separator' },
         command('New Browser Tab', 'CmdOrCtrl+Shift+B', 'new-browser-tab'),

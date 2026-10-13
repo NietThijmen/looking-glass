@@ -40,6 +40,9 @@ function runMenuCommand(command: MenuCommand): void {
     case 'show-git':
       ui.showSidebar('git')
       break
+    case 'show-commits':
+      ui.showSidebar('commits')
+      break
     case 'new-browser-tab':
       openBrowserTab()
       break

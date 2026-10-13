@@ -58,6 +58,9 @@ const api: LookingglassApi = {
     status: () => invoke('git:status'),
     headContents: (path) => invoke('git:headContents', path),
     diff: () => invoke('git:diff'),
+    log: (limit) => invoke('git:log', limit),
+    commit: (message) => invoke('git:commit', message),
+    push: () => invoke('git:push'),
     onChanged: (listener) => subscribe('git:changed', listener),
   },
   editor: {

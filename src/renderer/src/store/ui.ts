@@ -7,7 +7,7 @@ import {
   type WorkbenchLayout,
 } from '../layout/workbenchState'
 
-export type SidebarView = 'explorer' | 'search' | 'git'
+export type SidebarView = 'explorer' | 'search' | 'git' | 'commits'
 
 interface UiStore {
   layout: WorkbenchLayout

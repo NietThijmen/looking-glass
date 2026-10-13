@@ -129,6 +129,26 @@ export interface GitStatus {
   entries: GitStatusEntry[]
 }
 
+export interface GitLogEntry {
+  hash: string
+  shortHash: string
+  subject: string
+  author: string
+  /** ISO-8601 timestamp from git. */
+  date: string
+}
+
+export interface GitCommitResult {
+  ok: boolean
+  shortHash?: string
+  error?: string
+}
+
+export interface GitPushResult {
+  ok: boolean
+  error?: string
+}
+
 export interface TerminalCreateOptions {
   cols: number
   rows: number
@@ -147,6 +167,7 @@ export type MenuCommand =
   | 'show-explorer'
   | 'show-search'
   | 'show-git'
+  | 'show-commits'
   | 'toggle-picker'
   | 'new-browser-tab'
 
@@ -167,6 +188,9 @@ export interface InvokeContract {
 
   'git:status': { args: []; result: GitStatus | null }
   'git:headContents': { args: [path: string]; result: string | null }
+  'git:log': { args: [limit?: number]; result: GitLogEntry[] }
+  'git:commit': { args: [message: string]; result: GitCommitResult }
+  'git:push': { args: []; result: GitPushResult }
 
   'terminal:create': { args: [options: TerminalCreateOptions]; result: TerminalInfo }
   'terminal:write': { args: [id: string, data: string]; result: void }
@@ -292,6 +316,9 @@ export interface LookingglassApi {
     headContents(path: string): Promise<string | null>
     /** `git diff HEAD` for the workspace. */
     diff(): Promise<string>
+    log(limit?: number): Promise<GitLogEntry[]>
+    commit(message: string): Promise<GitCommitResult>
+    push(): Promise<GitPushResult>
     onChanged(listener: Listener<'git:changed'>): Unsubscribe
   }
   editor: {

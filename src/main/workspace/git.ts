@@ -1,6 +1,13 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { GitFileStatus, GitStatus, GitStatusEntry } from '../../shared/ipc'
+import type {
+  GitCommitResult,
+  GitFileStatus,
+  GitLogEntry,
+  GitPushResult,
+  GitStatus,
+  GitStatusEntry,
+} from '../../shared/ipc'
 
 const exec = promisify(execFile)
 const MAX_BUFFER = 64 * 1024 * 1024
@@ -13,6 +20,28 @@ async function git(cwd: string, args: string[]): Promise<string> {
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' },
   })
   return stdout
+}
+
+function gitError(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const stderr = (error as { stderr?: string | Buffer }).stderr
+    if (stderr) return (typeof stderr === 'string' ? stderr : stderr.toString()).trim()
+    const stdout = (error as { stdout?: string | Buffer }).stdout
+    if (stdout) return (typeof stdout === 'string' ? stdout : stdout.toString()).trim()
+  }
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** Parse `git log --format=… -z` records separated by unit separator. */
+export function parseGitLog(output: string): GitLogEntry[] {
+  const entries: GitLogEntry[] = []
+  for (const record of output.split('\0')) {
+    if (!record) continue
+    const [hash, shortHash, subject, author, date] = record.split('\x1f')
+    if (!hash || !shortHash || subject === undefined || !author || !date) continue
+    entries.push({ hash, shortHash, subject, author, date })
+  }
+  return entries
 }
 
 function codeToStatus(code: string): GitFileStatus | null {
@@ -119,6 +148,46 @@ export class GitService {
       return await git(root, ['show', `HEAD:./${relPath}`])
     } catch {
       return null
+    }
+  }
+
+  async log(root: string, limit = 50): Promise<GitLogEntry[]> {
+    try {
+      const output = await git(root, [
+        'log',
+        `-n`,
+        String(limit),
+        '--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI',
+        '-z',
+      ])
+      return parseGitLog(output)
+    } catch {
+      return []
+    }
+  }
+
+  /** Stage all changes under the workspace root and commit. */
+  async commit(root: string, message: string): Promise<GitCommitResult> {
+    const trimmed = message.trim()
+    if (!trimmed) return { ok: false, error: 'Commit message is required' }
+    try {
+      await git(root, ['add', '-A', '--', '.'])
+      await git(root, ['commit', '-m', trimmed])
+      const shortHash = (await git(root, ['rev-parse', '--short', 'HEAD'])).trim()
+      return { ok: true, shortHash }
+    } catch (error) {
+      const text = gitError(error)
+      if (/nothing to commit/i.test(text)) return { ok: false, error: 'Nothing to commit' }
+      return { ok: false, error: text || 'Commit failed' }
+    }
+  }
+
+  async push(root: string): Promise<GitPushResult> {
+    try {
+      await git(root, ['push'])
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: gitError(error) || 'Push failed' }
     }
   }
 }

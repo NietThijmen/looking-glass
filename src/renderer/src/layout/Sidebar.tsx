@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
-import { Files, GitBranch, Search } from 'lucide-react'
+import { Files, GitBranch, History, Search } from 'lucide-react'
+import { CommitsPanel } from '../git/CommitsPanel'
 import { Explorer } from '../explorer/Explorer'
 import { GitPanel } from '../git/GitPanel'
 import { SearchPanel } from '../search/SearchPanel'
@@ -11,6 +12,7 @@ const views: Array<{ id: SidebarView; label: string; icon: LucideIcon; hint: str
   { id: 'explorer', label: 'Explorer', icon: Files, hint: '⇧⌘E' },
   { id: 'search', label: 'Search', icon: Search, hint: '⇧⌘F' },
   { id: 'git', label: 'Source Control', icon: GitBranch, hint: '⌃⇧G' },
+  { id: 'commits', label: 'Commits', icon: History, hint: '⌃⇧H' },
 ]
 
 export function ActivityBar() {
@@ -55,6 +57,9 @@ export function Sidebar() {
       </div>
       <div className={current === 'git' ? 'h-full' : 'hidden'}>
         <GitPanel />
+      </div>
+      <div className={current === 'commits' ? 'h-full' : 'hidden'}>
+        <CommitsPanel />
       </div>
     </aside>
   )

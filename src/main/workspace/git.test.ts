@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { GitService, parsePorcelainV2 } from './git'
+import { GitService, parseGitLog, parsePorcelainV2 } from './git'
 
 const z = (...records: string[]): string => records.join('\0') + '\0'
 
@@ -41,6 +41,22 @@ describe('parsePorcelainV2', () => {
     const output = z('1 .M N... 100644 100644 100644 a b pkg/web/src/a.ts', '? other/b.ts')
     expect(parsePorcelainV2(output, 'pkg/web/').entries).toEqual([
       { path: 'src/a.ts', status: 'modified', staged: false },
+    ])
+  })
+})
+
+describe('parseGitLog', () => {
+  it('parses NUL-separated log records', () => {
+    const output =
+      'abc123def456789\x1fabc123d\x1fInitial commit\x1fAda Lovelace\x1f2024-01-02T12:00:00+00:00\0'
+    expect(parseGitLog(output)).toEqual([
+      {
+        hash: 'abc123def456789',
+        shortHash: 'abc123d',
+        subject: 'Initial commit',
+        author: 'Ada Lovelace',
+        date: '2024-01-02T12:00:00+00:00',
+      },
     ])
   })
 })

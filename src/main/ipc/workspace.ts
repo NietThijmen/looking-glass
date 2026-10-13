@@ -97,6 +97,17 @@ export function registerWorkspaceHandlers(): void {
     await workspace.resolve(path)
     return git.headContents(requireRoot(), path)
   })
+  handle('git:log', (_e, limit) => (workspace.root ? git.log(workspace.root, limit ?? 50) : []))
+  handle('git:commit', async (_e, message) => {
+    const result = await git.commit(requireRoot(), message)
+    if (result.ok) broadcast('git:changed', null)
+    return result
+  })
+  handle('git:push', async () => {
+    const result = await git.push(requireRoot())
+    if (result.ok) broadcast('git:changed', null)
+    return result
+  })
 
   handle('terminal:create', (_e, options) => terminals.create(workspace.root, options))
   handle('terminal:write', (_e, id, data) => terminals.write(id, data))
