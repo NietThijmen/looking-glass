@@ -7,14 +7,19 @@ interface WorkspaceStore {
   /** Loaded directory listings keyed by directory path ("" = root). */
   children: Record<string, DirEntry[]>
   expanded: Record<string, boolean>
+  /** Workspace file paths for @pierre/trees (gitignore respected). */
+  filePaths: string[] | null
+  /** Explorer should scroll to this path once, then clear. */
+  pendingTreeReveal: string | null
   git: GitStatus | null
   /** Git status by file path, plus a rolled-up marker for every ancestor dir. */
   gitByPath: Record<string, GitStatusEntry['status']>
 
   setWorkspace(info: WorkspaceInfo | null): Promise<void>
   loadDir(path: string): Promise<void>
+  loadFilePaths(): Promise<void>
   toggleDir(path: string): void
-  revealPath(path: string): Promise<void>
+  revealPath(path: string): void
   refreshGit(): Promise<void>
   applyFsChanges(changes: FsChange[]): void
 }
@@ -34,13 +39,33 @@ export const useWorkspace = create<WorkspaceStore>((set, get) => ({
   info: null,
   children: {},
   expanded: {},
+  filePaths: null,
+  pendingTreeReveal: null,
   git: null,
   gitByPath: {},
 
   async setWorkspace(info) {
-    set({ info, children: {}, expanded: {}, git: null, gitByPath: {} })
+    set({
+      info,
+      children: {},
+      expanded: {},
+      filePaths: null,
+      pendingTreeReveal: null,
+      git: null,
+      gitByPath: {},
+    })
     if (!info) return
-    await Promise.all([get().loadDir(''), get().refreshGit()])
+    await Promise.all([get().loadFilePaths(), get().refreshGit()])
+  },
+
+  async loadFilePaths() {
+    if (!get().info) return
+    try {
+      const paths = await window.lookingglass.fs.listFiles()
+      set({ filePaths: paths })
+    } catch {
+      set({ filePaths: [] })
+    }
   },
 
   async loadDir(path) {
@@ -65,14 +90,8 @@ export const useWorkspace = create<WorkspaceStore>((set, get) => ({
     if (open && !get().children[path]) void get().loadDir(path)
   },
 
-  async revealPath(path) {
-    const dirs = ancestors(path)
-    set((s) => {
-      const expanded = { ...s.expanded }
-      for (const dir of dirs) if (dir) expanded[dir] = true
-      return { expanded }
-    })
-    await Promise.all(dirs.filter((d) => !get().children[d]).map((d) => get().loadDir(d)))
+  revealPath(path) {
+    set({ pendingTreeReveal: path })
   },
 
   async refreshGit() {
@@ -90,5 +109,6 @@ export const useWorkspace = create<WorkspaceStore>((set, get) => ({
       if (children[parent]) dirs.add(parent)
     }
     for (const dir of dirs) void get().loadDir(dir)
+    void get().loadFilePaths()
   },
 }))

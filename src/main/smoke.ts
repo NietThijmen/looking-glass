@@ -48,6 +48,16 @@ const helpers = `
       return text
     },
     click: (selector) => { const el = document.querySelector(selector); el?.click(); return !!el },
+    treeRoot: () => document.querySelector('[data-testid="explorer"]')?.shadowRoot ?? null,
+    treeItem: (path) => {
+      const root = window.__lg.treeRoot()
+      return root?.querySelector('[data-item-path="' + path + '"]') ?? null
+    },
+    clickTree: (path) => {
+      const el = window.__lg.treeItem(path)
+      el?.click()
+      return !!el
+    },
   }
   true
 `
@@ -61,13 +71,13 @@ const baseChecks: Record<string, Check> = {
 }
 
 const workspaceChecks: Record<string, Check> = {
-  'explorer lists the workspace': `__lg.waitFor(() => document.querySelector('[data-testid="tree-item"][data-path="README.md"]'))`,
+  'explorer lists the workspace': `__lg.waitFor(() => __lg.treeItem('README.md'))`,
   'directories expand': `(async () => {
-    __lg.click('[data-testid="tree-item"][data-path="src"]')
-    return __lg.waitFor(() => document.querySelector('[data-testid="tree-item"][data-path="src/app.ts"]'))
+    __lg.clickTree('src')
+    return __lg.waitFor(() => __lg.treeItem('src/app.ts'))
   })()`,
   'files open in the editor': `(async () => {
-    __lg.click('[data-testid="tree-item"][data-path="src/app.ts"]')
+    __lg.clickTree('src/app.ts')
     return __lg.waitFor(() => {
       const el = document.querySelector('[data-testid="code-editor"][data-path="src/app.ts"]')
       return el && __lg.deepText(el).includes('console.log(greeting)')
