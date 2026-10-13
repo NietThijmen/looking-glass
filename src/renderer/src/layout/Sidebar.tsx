@@ -43,8 +43,9 @@ export function ActivityBar() {
 
 export function Sidebar() {
   const current = useUi((s) => s.sidebar)
+  const width = useUi((s) => s.layout.sidebarWidth)
   return (
-    <aside className="w-64 shrink-0 border-r border-border bg-panel">
+    <aside style={{ width }} className="shrink-0 border-r border-border bg-panel">
       {/* Keep panels mounted so search state survives switching views. */}
       <div className={current === 'explorer' ? 'h-full' : 'hidden'}>
         <Explorer />

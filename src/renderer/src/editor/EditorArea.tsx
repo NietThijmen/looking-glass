@@ -1,5 +1,5 @@
 import { basename } from '../lib/paths'
-import { isDirty, useEditor, type Tab } from '../store/editor'
+import { isDirty, useEditor, type Tab, type TabKind } from '../store/editor'
 import { CodeEditor } from './CodeEditor'
 import { BrowserTab } from '../browser/BrowserTab'
 import { ReviewView } from '../review/ReviewView'
@@ -131,12 +131,25 @@ function ActiveTab({ tab }: { tab: Tab }) {
   )
 }
 
-export function EditorArea() {
-  const tabs = useEditor((s) => s.tabs)
+const CODE_KINDS: TabKind[] = ['file', 'diff', 'review', 'browser']
+
+function pickActiveTab(tabs: Tab[], activeId: string | null): Tab | undefined {
+  if (!tabs.length) return undefined
+  return tabs.find((t) => t.id === activeId) ?? tabs[tabs.length - 1]
+}
+
+export function EditorArea({ kinds = CODE_KINDS }: { kinds?: TabKind[] }) {
+  const allTabs = useEditor((s) => s.tabs)
   const activeId = useEditor((s) => s.activeId)
-  const active = tabs.find((t) => t.id === activeId)
+  const tabs = allTabs.filter((t) => kinds.includes(t.kind))
+  const globalActive = allTabs.find((t) => t.id === activeId)
+  const scopedActiveId = globalActive && kinds.includes(globalActive.kind) ? activeId : null
+  const active = pickActiveTab(tabs, scopedActiveId)
+
+  const browserOnly = kinds.length === 1 && kinds[0] === 'browser'
 
   if (!tabs.length) {
+    if (browserOnly) return null
     return (
       <div className="flex h-full items-center justify-center text-muted">
         <div className="text-center">

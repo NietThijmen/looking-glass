@@ -245,7 +245,7 @@ export function AgentPanel() {
   const label = (id: string): string => agents.find((a) => a.id === id)?.label ?? id
 
   return (
-    <aside className="flex w-96 shrink-0 flex-col border-l border-border bg-bg" data-testid="agent-panel">
+    <aside className="flex h-full min-w-0 flex-1 flex-col bg-bg" data-testid="agent-panel">
       <div className="relative flex h-9 shrink-0 items-center gap-1 border-b border-border bg-panel px-2">
         <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
           {chats.map((chat, i) => (

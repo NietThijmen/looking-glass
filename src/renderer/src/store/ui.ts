@@ -1,8 +1,16 @@
 import { create } from 'zustand'
+import {
+  loadWorkbenchLayout,
+  normalizeWorkbenchLayout,
+  saveWorkbenchLayout,
+  type WorkbenchColumn,
+  type WorkbenchLayout,
+} from '../layout/workbenchState'
 
 export type SidebarView = 'explorer' | 'search' | 'git'
 
 interface UiStore {
+  layout: WorkbenchLayout
   sidebar: SidebarView
   terminalOpen: boolean
   /** Bumped to ask the search input to take focus. */
@@ -15,9 +23,12 @@ interface UiStore {
   focusTerminal(id: string): void
   showSidebar(view: SidebarView): void
   toggleTerminal(): void
+  patchLayout(patch: Partial<WorkbenchLayout>): void
+  reorderColumns(from: WorkbenchColumn, onto: WorkbenchColumn): void
 }
 
-export const useUi = create<UiStore>((set) => ({
+export const useUi = create<UiStore>((set, get) => ({
+  layout: loadWorkbenchLayout(),
   sidebar: 'explorer',
   terminalOpen: true,
   searchFocusToken: 0,
@@ -32,4 +43,19 @@ export const useUi = create<UiStore>((set) => ({
       searchFocusToken: view === 'search' ? s.searchFocusToken + 1 : s.searchFocusToken,
     })),
   toggleTerminal: () => set((s) => ({ terminalOpen: !s.terminalOpen })),
+  patchLayout: (patch) =>
+    set((s) => {
+      const layout = normalizeWorkbenchLayout({ ...s.layout, ...patch })
+      saveWorkbenchLayout(layout)
+      return { layout }
+    }),
+  reorderColumns: (from, onto) => {
+    const order = [...get().layout.columnOrder]
+    const fromIndex = order.indexOf(from)
+    const ontoIndex = order.indexOf(onto)
+    if (fromIndex === -1 || ontoIndex === -1 || fromIndex === ontoIndex) return
+    order.splice(fromIndex, 1)
+    order.splice(ontoIndex, 0, from)
+    get().patchLayout({ columnOrder: order })
+  },
 }))

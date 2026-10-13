@@ -2,18 +2,18 @@ import { EditProvider } from '@pierre/diffs/react'
 import { GitBranch, Icon, iconSize } from './ui/icon'
 import { useEffect, useState } from 'react'
 import type { AppInfo, MenuCommand, WindowState } from '../../shared/ipc'
-import { AgentPanel } from './agent/AgentPanel'
 import { createEditor } from './editor/diffsConfig'
-import { EditorArea, openBrowserTab } from './editor/EditorArea'
+import { openBrowserTab } from './editor/EditorArea'
 import { publishEditorSnapshots } from './editor/publishSnapshot'
+import { ResizeHandle } from './layout/ResizeHandle'
 import { ActivityBar, Sidebar } from './layout/Sidebar'
+import { Workbench } from './layout/Workbench'
 import { useAgents } from './store/agents'
 import { useBrowser } from './store/browser'
 import { useEditor } from './store/editor'
 import { useReview } from './store/review'
 import { useUi } from './store/ui'
 import { useWorkspace } from './store/workspace'
-import { TerminalPanel } from './terminal/TerminalPanel'
 
 function runMenuCommand(command: MenuCommand): void {
   const editor = useEditor.getState()
@@ -112,7 +112,8 @@ export function App() {
   const [windowState, setWindowState] = useState<WindowState | null>(null)
   const workspace = useWorkspace((s) => s.info)
   const branch = useWorkspace((s) => s.git?.branch)
-  const terminalOpen = useUi((s) => s.terminalOpen)
+  const patchLayout = useUi((s) => s.patchLayout)
+  const sidebarWidth = useUi((s) => s.layout.sidebarWidth)
 
   useEffect(() => {
     void window.lookingglass.app.getInfo().then(setInfo)
@@ -138,18 +139,14 @@ export function App() {
           <div className="flex min-h-0 flex-1">
             <ActivityBar />
             <Sidebar />
-            <main className="flex min-w-0 flex-1 flex-col">
-              <section className="min-h-0 flex-1 bg-bg">
-                <EditorArea />
-              </section>
-              <section
-                className={`h-64 shrink-0 border-t border-border bg-bg ${terminalOpen ? '' : 'hidden'}`}
-                aria-hidden={!terminalOpen}
-              >
-                <TerminalPanel />
-              </section>
+            <ResizeHandle
+              axis="horizontal"
+              data-testid="resize-sidebar"
+              onDelta={(delta) => patchLayout({ sidebarWidth: sidebarWidth + delta })}
+            />
+            <main className="flex min-w-0 flex-1 flex-col bg-bg">
+              <Workbench />
             </main>
-            <AgentPanel />
           </div>
         )}
 
