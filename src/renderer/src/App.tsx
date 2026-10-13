@@ -49,6 +49,9 @@ function runMenuCommand(command: MenuCommand): void {
     case 'show-commits':
       ui.showSidebar('commits')
       break
+    case 'show-agents':
+      ui.showSidebar('agents')
+      break
     case 'new-browser-tab':
       openBrowserTab()
       break

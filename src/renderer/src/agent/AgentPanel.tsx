@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { basename } from '../lib/paths'
-import { useAgents, type Chat } from '../store/agents'
+import { AppWindow, PanelLeft } from 'lucide-react'
+import { useAgents, type Chat, type ChatPlacement } from '../store/agents'
 import { useEditor } from '../store/editor'
 import { useReview } from '../store/review'
 import { useUi } from '../store/ui'
@@ -218,7 +219,14 @@ function ChatView({ chat }: { chat: Chat }) {
   )
 }
 
-function NewChatMenu({ onClose }: { onClose(): void }) {
+/** A chat's tab or header name: its title, or the agent's name and number. */
+export function useChatLabel(chat: Chat | undefined): string {
+  const agent = useAgents((s) => s.agents.find((a) => a.id === chat?.agentId)?.label)
+  if (!chat) return 'Chat'
+  return chat.title ?? `${agent ?? chat.agentId} ${chat.key}`
+}
+
+export function NewChatMenu({ placement, onClose }: { placement: ChatPlacement; onClose(): void }) {
   const agents = useAgents((s) => s.agents)
   return (
     <div className="absolute top-full right-0 z-10 mt-1 w-56 rounded border border-border bg-panel py-1 shadow-xl">
@@ -229,7 +237,7 @@ function NewChatMenu({ onClose }: { onClose(): void }) {
           data-agent-id={agent.id}
           onClick={() => {
             onClose()
-            void useAgents.getState().newChat(agent.id)
+            void useAgents.getState().newChat(agent.id, { placement })
           }}
           className="block w-full px-3 py-1.5 text-left hover:bg-fg/5"
         >
@@ -240,89 +248,125 @@ function NewChatMenu({ onClose }: { onClose(): void }) {
   )
 }
 
-export function AgentPanel() {
+/** The agent list shown where no chat is open yet. */
+export function StartChat({ placement, testId }: { placement: ChatPlacement; testId: string }) {
   const hasWorkspace = useWorkspace((s) => !!s.info)
-  const chats = useAgents((s) => s.chats)
-  const activeKey = useAgents((s) => s.activeKey)
   const agents = useAgents((s) => s.agents)
+  if (!hasWorkspace) return <div className="text-muted">Open a folder to start a chat.</div>
+  return (
+    <div className="space-y-3 text-muted">
+      <div>Start a chat with an agent:</div>
+      {agents.map((agent) => (
+        <button
+          key={agent.id}
+          data-testid={testId}
+          data-agent-id={agent.id}
+          onClick={() => void useAgents.getState().newChat(agent.id, { placement })}
+          className="block w-full rounded border border-border px-3 py-2 text-left text-fg hover:bg-fg/5"
+        >
+          {agent.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+const headerButton = 'rounded px-1.5 text-muted hover:text-fg disabled:opacity-40'
+
+/** A chat open as a tab in the main pane. */
+export function AgentTab({ chatKey }: { chatKey: number }) {
+  const chat = useAgents((s) => s.chats.find((c) => c.key === chatKey))
+  const label = useChatLabel(chat)
+  if (!chat) return null
+  return (
+    <div className="flex h-full min-w-0 flex-col bg-bg" data-testid="agent-tab">
+      <div className="flex h-8 shrink-0 items-center gap-1 border-b border-border px-3">
+        <span className="min-w-0 flex-1 truncate text-muted" title={label}>
+          {label}
+        </span>
+        <button
+          data-testid="move-to-sidebar"
+          title="Move to sidebar"
+          onClick={() => useAgents.getState().moveToSidebar(chat.key)}
+          className={headerButton}
+        >
+          <Icon icon={PanelLeft} className={iconSize.sm} />
+        </button>
+      </div>
+      <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
+        <ChatView key={chat.key} chat={chat} />
+      </div>
+    </div>
+  )
+}
+
+/** The sidebar's Agents view: one chat that stays next to whatever tab is in front. */
+export function AgentsSidebar() {
+  const hasWorkspace = useWorkspace((s) => !!s.info)
+  const chat = useAgents((s) => s.chats.find((c) => c.key === s.sidebarKey))
+  const label = useChatLabel(chat)
   const [menu, setMenu] = useState<'new' | 'history' | null>(null)
   const toggle = (which: 'new' | 'history'): void => setMenu((m) => (m === which ? null : which))
-  const active = chats.find((c) => c.key === activeKey)
-  const label = (id: string): string => agents.find((a) => a.id === id)?.label ?? id
 
   return (
-    <aside className="flex h-full min-w-0 flex-1 flex-col bg-bg" data-testid="agent-panel">
+    <aside className="flex h-full min-w-0 flex-col bg-bg" data-testid="agent-panel">
       <div className="relative flex h-9 shrink-0 items-center gap-1 border-b border-border bg-panel px-2">
-        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-          {chats.map((chat, i) => (
-            <div
-              key={chat.key}
-              onClick={() => useAgents.getState().activate(chat.key)}
-              className={`group flex shrink-0 cursor-default items-center gap-1 rounded px-2 py-0.5 text-[12px] ${
-                chat.key === activeKey ? 'bg-fg/10 text-fg' : 'text-muted hover:text-fg'
-              }`}
+        <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-[12px] text-muted">
+          {chat?.busy && <StatusDot className="text-accent" />}
+          <span className="truncate" title={chat ? label : undefined}>
+            {chat ? label : 'Agents'}
+          </span>
+        </span>
+        {chat && (
+          <>
+            <button
+              data-testid="move-to-tab"
+              title="Open in a tab"
+              onClick={() => useAgents.getState().moveToTab(chat.key)}
+              className={headerButton}
             >
-              {chat.busy && <StatusDot className="text-accent" />}
-              <span className="max-w-40 truncate" title={chat.title}>
-                {chat.title ?? `${label(chat.agentId)} ${i + 1}`}
-              </span>
-              <button
-                aria-label="Close chat"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  useAgents.getState().closeChat(chat.key)
-                }}
-                className="opacity-0 group-hover:opacity-100"
-              >
-                <Icon icon={X} className={iconSize.sm} />
-              </button>
-            </div>
-          ))}
-        </div>
+              <Icon icon={AppWindow} className={iconSize.sm} />
+            </button>
+            <button
+              aria-label="Close chat"
+              title="Close chat"
+              onClick={() => useAgents.getState().closeChat(chat.key)}
+              className={headerButton}
+            >
+              <Icon icon={X} className={iconSize.sm} />
+            </button>
+          </>
+        )}
         <button
           data-testid="history"
           disabled={!hasWorkspace}
           title="Earlier sessions"
           onClick={() => toggle('history')}
-          className="rounded px-1.5 text-muted hover:text-fg disabled:opacity-40"
+          className={headerButton}
         >
           <Icon icon={History} className={iconSize.sm} />
         </button>
         <button
           data-testid="new-chat"
           disabled={!hasWorkspace}
-          title="New chat"
+          title="New chat in the sidebar"
           onClick={() => toggle('new')}
-          className="rounded px-1.5 text-muted hover:text-fg disabled:opacity-40"
+          className={headerButton}
         >
           <Icon icon={Plus} className={iconSize.sm} />
         </button>
-        {menu === 'new' && <NewChatMenu onClose={() => setMenu(null)} />}
-        {menu === 'history' && <HistoryMenu onClose={() => setMenu(null)} />}
+        {menu === 'new' && <NewChatMenu placement="sidebar" onClose={() => setMenu(null)} />}
+        {menu === 'history' && <HistoryMenu placement="sidebar" onClose={() => setMenu(null)} />}
       </div>
 
-      {active ? (
-        <ChatView key={active.key} chat={active} />
+      {chat ? (
+        <ChatView key={chat.key} chat={chat} />
       ) : (
-        <div className="space-y-3 p-4 text-muted">
-          {hasWorkspace ? (
-            <>
-              <div>Start a chat with an agent:</div>
-              {agents.map((agent) => (
-                <button
-                  key={agent.id}
-                  data-testid="start-agent"
-                  data-agent-id={agent.id}
-                  onClick={() => void useAgents.getState().newChat(agent.id)}
-                  className="block w-full rounded border border-border px-3 py-2 text-left text-fg hover:bg-fg/5"
-                >
-                  {agent.label}
-                </button>
-              ))}
-            </>
-          ) : (
-            <div>Open a folder to start a chat.</div>
-          )}
+        <div className="p-4">
+          <StartChat placement="sidebar" testId="start-agent" />
+          <div className="mt-4 text-[11px] text-muted">
+            Browser questions go to this chat. Open more chats as tabs from the tab bar.
+          </div>
         </div>
       )}
     </aside>

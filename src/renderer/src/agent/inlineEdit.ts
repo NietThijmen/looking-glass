@@ -53,6 +53,7 @@ export async function runInlineEdit(target: SelectionInfo, instruction: string):
   if (isDirty(editor.buffers[target.path])) await editor.save(target.path)
   const agents = useAgents.getState()
   const key = await agents.newChat(undefined, {
+    placement: 'background',
     title: `Edit ${basename(target.path)}:${target.startLine}${target.endLine !== target.startLine ? `-${target.endLine}` : ''}`,
   })
   const chat = useAgents.getState().chats.find((c) => c.key === key)

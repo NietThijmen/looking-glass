@@ -1,10 +1,12 @@
 import type { LucideIcon } from 'lucide-react'
-import { Files, GitBranch, History, Search, Settings } from 'lucide-react'
+import { Bot, Files, GitBranch, History, Search, Settings } from 'lucide-react'
 import type { MenuCommand } from '../../../shared/ipc'
+import { AgentsSidebar } from '../agent/AgentPanel'
 import { CommitsPanel } from '../git/CommitsPanel'
 import { Explorer } from '../explorer/Explorer'
 import { GitPanel } from '../git/GitPanel'
 import { SearchPanel } from '../search/SearchPanel'
+import { useAgents } from '../store/agents'
 import { useEditor } from '../store/editor'
 import { useShortcut } from '../store/settings'
 import { useUi, type SidebarView } from '../store/ui'
@@ -16,10 +18,12 @@ const views: Array<{ id: SidebarView; label: string; icon: LucideIcon; command: 
   { id: 'search', label: 'Search', icon: Search, command: 'show-search' },
   { id: 'git', label: 'Source Control', icon: GitBranch, command: 'show-git' },
   { id: 'commits', label: 'Commits', icon: History, command: 'show-commits' },
+  { id: 'agents', label: 'Agents', icon: Bot, command: 'show-agents' },
 ]
 
 function ActivityButton({ view: v, changes }: { view: (typeof views)[number]; changes: number }) {
   const active = useUi((s) => s.layout.sidebarOpen && s.sidebar === v.id)
+  const busy = useAgents((s) => v.id === 'agents' && s.chats.some((c) => c.key === s.sidebarKey && c.busy))
   const hint = useShortcut(v.command)
   return (
     <button
@@ -37,6 +41,7 @@ function ActivityButton({ view: v, changes }: { view: (typeof views)[number]; ch
           {changes > 99 ? '99+' : changes}
         </span>
       )}
+      {busy && !active && <span className="absolute top-1 right-1 size-1.5 rounded-full bg-accent" />}
     </button>
   )
 }
@@ -80,6 +85,9 @@ export function Sidebar() {
       </div>
       <div className={current === 'commits' ? 'h-full' : 'hidden'}>
         <CommitsPanel />
+      </div>
+      <div className={current === 'agents' ? 'h-full' : 'hidden'}>
+        <AgentsSidebar />
       </div>
     </aside>
   )

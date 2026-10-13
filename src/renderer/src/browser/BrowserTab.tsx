@@ -34,8 +34,8 @@ const DEVICES = [
 ] as const
 
 function activeCaps() {
-  const { chats, activeKey } = useAgents.getState()
-  return chats.find((c) => c.key === activeKey)?.promptCapabilities ?? { image: true, embeddedContext: true }
+  const { chats, sidebarKey } = useAgents.getState()
+  return chats.find((c) => c.key === sidebarKey)?.promptCapabilities ?? { image: true, embeddedContext: true }
 }
 
 function Toolbar({ tabId }: { tabId: string }) {

@@ -389,7 +389,7 @@ const workspaceChecks: Record<string, Check> = {
     return page(`(async () => {
       const ok = await __lg.waitFor(async () =>
         (await window.lookingglass.fs.readFile('src/types.ts')).contents.startsWith('// count is a number')
-        && [...document.querySelectorAll('[data-testid="agent-message"]')].some((m) => m.textContent.includes('Edited src/types.ts')), 15000)
+        && [...document.querySelectorAll('[data-testid="editor-tab"]')].some((t) => t.textContent.includes('Edit types.ts:1')), 15000)
       return ok
     })()`)
   },

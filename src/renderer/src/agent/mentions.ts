@@ -131,7 +131,7 @@ export async function resolveMention(
       }
     case 'selection': {
       const editor = useEditor.getState()
-      const active = editor.tabs.find((t) => t.id === editor.activeId && t.kind === 'file')
+      const active = editor.tabs.find((t) => t.id === editor.lastCodeId && t.kind === 'file')
       const selection = active ? selectionIn(active.path) : null
       if (!selection) return { error: 'Select some code in the editor first.' }
       const where = `${selection.path}:${selection.startLine}-${selection.endLine}`

@@ -3,11 +3,10 @@ import {
   loadWorkbenchLayout,
   normalizeWorkbenchLayout,
   saveWorkbenchLayout,
-  type WorkbenchColumn,
   type WorkbenchLayout,
 } from '../layout/workbenchState'
 
-export type SidebarView = 'explorer' | 'search' | 'git' | 'commits'
+export type SidebarView = 'explorer' | 'search' | 'git' | 'commits' | 'agents'
 
 interface UiStore {
   layout: WorkbenchLayout
@@ -27,7 +26,6 @@ interface UiStore {
   toggleSidebar(): void
   toggleTerminal(): void
   patchLayout(patch: Partial<WorkbenchLayout>): void
-  reorderColumns(from: WorkbenchColumn, onto: WorkbenchColumn): void
 }
 
 export const useUi = create<UiStore>((set, get) => ({
@@ -60,13 +58,4 @@ export const useUi = create<UiStore>((set, get) => ({
       saveWorkbenchLayout(layout)
       return { layout }
     }),
-  reorderColumns: (from, onto) => {
-    const order = [...get().layout.columnOrder]
-    const fromIndex = order.indexOf(from)
-    const ontoIndex = order.indexOf(onto)
-    if (fromIndex === -1 || ontoIndex === -1 || fromIndex === ontoIndex) return
-    order.splice(fromIndex, 1)
-    order.splice(ontoIndex, 0, from)
-    get().patchLayout({ columnOrder: order })
-  },
 }))

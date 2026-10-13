@@ -172,6 +172,7 @@ export type MenuCommand =
   | 'show-search'
   | 'show-git'
   | 'show-commits'
+  | 'show-agents'
   | 'toggle-picker'
   | 'new-browser-tab'
   | 'inline-edit'

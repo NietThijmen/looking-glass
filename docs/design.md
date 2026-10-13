@@ -104,13 +104,14 @@ Claude Code is built in: the adapter (and the Claude CLI binary it ships) is a p
 ┌──────────────────────────── Electron ─────────────────────────────┐
 │                                                                   │
 │  Renderer (React, sandboxed, contextIsolation)                    │
-│  ┌───────────┬──────────────────────────────┬──────────────────┐  │
-│  │ File tree │  @pierre/diffs editor + diffs│  Agent panel     │  │
-│  │ Search    │  Tabs, pending-edit overlays │  chat, tool calls│  │
-│  │ Git       │  Browser tabs + el. picker   │  plans, perms    │  │
-│  │           ├──────────────────────────────┤  agent picker    │  │
-│  │           │  Terminals (ghostty-web)     │                  │  │
-│  └───────────┴──────────────────────────────┴──────────────────┘  │
+│  ┌──────────────┬──────────────────────────────────────────────┐  │
+│  │ Sidebar      │  One tabbed pane                             │  │
+│  │ File tree    │  Browser tabs + element picker               │  │
+│  │ Search, Git  │  Code tabs: @pierre/diffs editor + diffs     │  │
+│  │ Agents: one  │  Chat tabs: chat, tool calls, plans, perms   │  │
+│  │ docked chat  ├──────────────────────────────────────────────┤  │
+│  │              │  Terminals (ghostty-web)                     │  │
+│  └──────────────┴──────────────────────────────────────────────┘  │
 │                    ▲  typed IPC via preload (contextBridge)       │
 │                    ▼                                              │
 │  Main process                                                     │

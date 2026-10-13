@@ -89,7 +89,7 @@ export function Composer({ chat }: { chat: Chat }) {
   const [dismissedAt, setDismissedAt] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const activeFile = useEditor(
-    (s) => s.tabs.find((t) => t.id === s.activeId && t.kind === 'file')?.path ?? null,
+    (s) => s.tabs.find((t) => t.id === s.lastCodeId && t.kind === 'file')?.path ?? null,
   )
   const { send, cancel, setMode } = useAgents.getState()
   const ref = useRef<HTMLTextAreaElement>(null)

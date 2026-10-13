@@ -10,8 +10,16 @@ import type {
   SessionUpdate,
 } from '../../../shared/agent'
 import { applyUpdate, notice, turnEnd, userItem, type TranscriptItem } from '../agent/transcript'
+import { agentTabPath, tabId, useEditor } from './editor'
+import { useUi } from './ui'
 
 export type ChatState = 'starting' | 'auth' | 'ready' | 'error'
+
+/**
+ * Where a new chat shows up: the sidebar's one chat, a tab in front, or a tab
+ * opened behind the current one (e.g. a Cmd+K edit, watched only if you want to).
+ */
+export type ChatPlacement = 'sidebar' | 'tab' | 'background'
 
 export interface Chat {
   key: number
@@ -61,26 +69,37 @@ interface AgentsStore {
   agents: AgentSummary[]
   statuses: Record<string, AgentStatus>
   chats: Chat[]
-  activeKey: number | null
+  /** The chat in the sidebar's Agents view; every other chat is a tab. Browser asks go here. */
+  sidebarKey: number | null
   /** Open permission requests by requestId. */
   permissions: Record<string, PermissionRequest>
   defaultAgentId: string
 
   loadAgents(): Promise<void>
-  /** Start a chat (and make it active); resolves once its session is ready or failed. */
-  newChat(agentId?: string, options?: { title?: string }): Promise<number>
+  /** Start a chat (in a tab unless placed elsewhere); resolves once its session is ready or failed. */
+  newChat(agentId?: string, options?: { title?: string; placement?: ChatPlacement }): Promise<number>
   /** Open a past session from the agent's history (or switch to it if it's already open). */
-  openSession(agentId: string, sessionId: string, title?: string | null): Promise<void>
+  openSession(
+    agentId: string,
+    sessionId: string,
+    title?: string | null,
+    placement?: ChatPlacement,
+  ): Promise<void>
   retryChat(key: number): Promise<void>
   closeChat(key: number): void
-  activate(key: number): void
+  /** Bring a chat to the front, wherever it lives. */
+  reveal(key: number): void
+  /** Put a chat in the sidebar; the chat already there moves to a tab. */
+  moveToSidebar(key: number): void
+  /** Move the sidebar's chat into a tab in front. */
+  moveToTab(key: number): void
   send(key: number, text: string, attachments: Attachment[]): Promise<void>
   restore(key: number, itemId: number): Promise<void>
   /** Attachments waiting in a chat's composer (e.g. an element picked in the browser). */
   pending: Record<number, Attachment[]>
   addPending(attachment: Attachment): Promise<void>
   takePending(key: number): Attachment[]
-  /** Send to the active chat, or a new one; starts a chat with the default agent if needed. */
+  /** Send to the sidebar's chat, or a new one there; starts a chat with the default agent if needed. */
   ask(text: string, attachments: Attachment[], options?: { newChat?: boolean }): Promise<void>
   cancel(key: number): Promise<void>
   setMode(key: number, modeId: string): Promise<void>
@@ -141,7 +160,21 @@ export const useAgents = create<AgentsStore>((set, get) => {
     }
   }
 
-  function addChat(agentId: string, extra: Partial<Chat> = {}): number {
+  function place(key: number, placement: ChatPlacement): void {
+    if (placement === 'sidebar') get().moveToSidebar(key)
+    else useEditor.getState().openAgent(key, { activate: placement === 'tab' })
+  }
+
+  /** The sidebar's chat, started fresh when asked or when there's no usable one. */
+  async function sidebarChat(fresh = false): Promise<Chat | undefined> {
+    const current = get().chats.find((c) => c.key === get().sidebarKey)
+    if (fresh || !current || current.state === 'error')
+      await get().newChat(undefined, { placement: 'sidebar' })
+    else useUi.getState().showSidebar('agents')
+    return get().chats.find((c) => c.key === get().sidebarKey)
+  }
+
+  function addChat(agentId: string, placement: ChatPlacement, extra: Partial<Chat> = {}): number {
     const key = nextKey++
     const chat: Chat = {
       key,
@@ -155,7 +188,8 @@ export const useAgents = create<AgentsStore>((set, get) => {
       canResume: false,
       ...extra,
     }
-    set((s) => ({ chats: [...s.chats, chat], activeKey: key, defaultAgentId: agentId }))
+    set((s) => ({ chats: [...s.chats, chat], defaultAgentId: agentId }))
+    place(key, placement)
     return key
   }
 
@@ -163,7 +197,7 @@ export const useAgents = create<AgentsStore>((set, get) => {
     agents: [],
     statuses: {},
     chats: [],
-    activeKey: null,
+    sidebarKey: null,
     permissions: {},
     defaultAgentId: 'claude-code',
 
@@ -178,18 +212,19 @@ export const useAgents = create<AgentsStore>((set, get) => {
     },
 
     async newChat(agentId, options) {
-      const key = addChat(agentId ?? get().defaultAgentId, options?.title ? { title: options.title } : {})
+      const key = addChat(
+        agentId ?? get().defaultAgentId,
+        options?.placement ?? 'tab',
+        options?.title ? { title: options.title } : {},
+      )
       await startSession(key)
       return key
     },
 
-    async openSession(agentId, sessionId, title) {
+    async openSession(agentId, sessionId, title, placement = 'tab') {
       const open = get().chats.find((c) => c.sessionId === sessionId || c.resumeId === sessionId)
-      if (open) {
-        set({ activeKey: open.key })
-        return
-      }
-      await startSession(addChat(agentId, { resumeId: sessionId, ...(title ? { title } : {}) }))
+      if (open) return get().reveal(open.key)
+      await startSession(addChat(agentId, placement, { resumeId: sessionId, ...(title ? { title } : {}) }))
     },
 
     retryChat: startSession,
@@ -197,17 +232,29 @@ export const useAgents = create<AgentsStore>((set, get) => {
     closeChat(key) {
       const chat = get().chats.find((c) => c.key === key)
       if (chat?.busy && chat.sessionId) void window.lookingglass.agent.cancel(chat.sessionId)
-      set((s) => {
-        const chats = s.chats.filter((c) => c.key !== key)
-        const index = s.chats.findIndex((c) => c.key === key)
-        const activeKey =
-          s.activeKey === key ? ((chats[index] ?? chats[index - 1])?.key ?? null) : s.activeKey
-        return { chats, activeKey }
-      })
+      set((s) => ({
+        chats: s.chats.filter((c) => c.key !== key),
+        sidebarKey: s.sidebarKey === key ? null : s.sidebarKey,
+      }))
+      useEditor.getState().removeTab(tabId('agent', agentTabPath(key)))
     },
 
-    activate(key) {
-      set({ activeKey: key })
+    reveal(key) {
+      if (get().sidebarKey === key) useUi.getState().showSidebar('agents')
+      else useEditor.getState().openAgent(key)
+    },
+
+    moveToSidebar(key) {
+      const previous = get().sidebarKey
+      if (previous !== null && previous !== key) useEditor.getState().openAgent(previous, { activate: false })
+      useEditor.getState().removeTab(tabId('agent', agentTabPath(key)))
+      set({ sidebarKey: key })
+      useUi.getState().showSidebar('agents')
+    },
+
+    moveToTab(key) {
+      if (get().sidebarKey === key) set({ sidebarKey: null })
+      useEditor.getState().openAgent(key)
     },
 
     async send(key, text, attachments) {
@@ -235,9 +282,8 @@ export const useAgents = create<AgentsStore>((set, get) => {
     pending: {},
 
     async addPending(attachment) {
-      if (get().activeKey === null) await get().newChat()
-      const key = get().activeKey
-      if (key === null) return
+      const key = (await sidebarChat())?.key
+      if (key === undefined) return
       set((s) => ({ pending: { ...s.pending, [key]: [...(s.pending[key] ?? []), attachment] } }))
     },
 
@@ -248,9 +294,7 @@ export const useAgents = create<AgentsStore>((set, get) => {
     },
 
     async ask(text, attachments, options) {
-      const active = get().chats.find((c) => c.key === get().activeKey)
-      if (options?.newChat || !active || active.state === 'error') await get().newChat()
-      const chat = get().chats.find((c) => c.key === get().activeKey)
+      const chat = await sidebarChat(options?.newChat)
       if (!chat) return
       if (chat.state !== 'ready' || chat.busy) {
         // Can't send right now (logging in, or mid-turn): leave it in the composer.
@@ -333,7 +377,7 @@ export const useAgents = create<AgentsStore>((set, get) => {
     },
 
     reset() {
-      set({ chats: [], activeKey: null, permissions: {} })
+      set({ chats: [], sidebarKey: null, permissions: {} })
     },
   }
 })

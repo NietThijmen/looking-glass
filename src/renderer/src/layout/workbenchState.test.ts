@@ -2,14 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { normalizeWorkbenchLayout } from './workbenchState'
 
 describe('normalizeWorkbenchLayout', () => {
-  it('clamps widths and fixes invalid column order', () => {
-    const layout = normalizeWorkbenchLayout({
-      agentWidth: 50,
-      browserWidth: 10_000,
-      columnOrder: ['editor', 'editor', 'browser'],
-    })
-    expect(layout.agentWidth).toBe(280)
-    expect(layout.browserWidth).toBe(900)
-    expect(layout.columnOrder).toEqual(['editor', 'agent', 'browser'])
+  it('clamps sizes and defaults missing fields', () => {
+    const layout = normalizeWorkbenchLayout({ sidebarWidth: 50, terminalHeight: 10_000 })
+    expect(layout.sidebarWidth).toBe(180)
+    expect(layout.terminalHeight).toBe(600)
+    expect(layout.sidebarOpen).toBe(true)
+  })
+
+  it('drops the old per-column layout', () => {
+    const layout = normalizeWorkbenchLayout({ agentWidth: 400, columnOrder: ['agent'] } as never)
+    expect(layout).toEqual({ sidebarWidth: 256, sidebarOpen: true, terminalHeight: 256 })
   })
 })

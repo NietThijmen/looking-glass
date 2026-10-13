@@ -1,5 +1,11 @@
+import { Bot } from 'lucide-react'
+import { useState } from 'react'
+import { AgentTab, NewChatMenu, StartChat, useChatLabel } from '../agent/AgentPanel'
+import { HistoryMenu } from '../agent/HistoryMenu'
 import { basename } from '../lib/paths'
-import { isDirty, useEditor, type Tab, type TabKind } from '../store/editor'
+import { useAgents } from '../store/agents'
+import { agentTabKey, isDirty, useEditor, type Tab } from '../store/editor'
+import { useWorkspace } from '../store/workspace'
 import { CodeEditor } from './CodeEditor'
 import { BrowserTab } from '../browser/BrowserTab'
 import { ReviewView } from '../review/ReviewView'
@@ -7,7 +13,7 @@ import { useBrowser } from '../store/browser'
 import { useReview } from '../store/review'
 import { SettingsView } from '../settings/SettingsView'
 import { useShortcut } from '../store/settings'
-import { Diff, Globe, Icon, Settings, Sparkles, X, iconSize } from '../ui/icon'
+import { Diff, Globe, History, Icon, Plus, Settings, Sparkles, StatusDot, X, iconSize } from '../ui/icon'
 import { GitDiffView } from './GitDiffView'
 
 function TabLabel({ tab }: { tab: Tab }) {
@@ -16,6 +22,18 @@ function TabLabel({ tab }: { tab: Tab }) {
   const browserTitle = useBrowser((s) =>
     tab.kind === 'browser' ? s.tabs[tab.path]?.title || s.tabs[tab.path]?.url : undefined,
   )
+  const chat = useAgents((s) =>
+    tab.kind === 'agent' ? s.chats.find((c) => c.key === agentTabKey(tab)) : undefined,
+  )
+  const chatLabel = useChatLabel(chat)
+  const label =
+    tab.kind === 'browser'
+      ? browserTitle || 'New tab'
+      : tab.kind === 'settings'
+        ? 'Settings'
+        : tab.kind === 'agent'
+          ? chatLabel
+          : basename(tab.path)
   const { activate, closeTab } = useEditor.getState()
   return (
     <div
@@ -24,7 +42,7 @@ function TabLabel({ tab }: { tab: Tab }) {
       data-testid="editor-tab"
       data-path={tab.path}
       data-dirty={dirty}
-      title={tab.path}
+      title={tab.kind === 'agent' ? chatLabel : tab.path}
       onMouseDown={(e) => {
         if (e.button === 1) closeTab(tab.id)
         else activate(tab.id)
@@ -37,15 +55,15 @@ function TabLabel({ tab }: { tab: Tab }) {
       {tab.kind === 'review' && <Icon icon={Sparkles} className={`${iconSize.sm} text-amber-300`} />}
       {tab.kind === 'browser' && <Icon icon={Globe} className={iconSize.sm} />}
       {tab.kind === 'settings' && <Icon icon={Settings} className={iconSize.sm} />}
-      <span className="truncate">
-        {tab.kind === 'browser'
-          ? browserTitle || 'New tab'
-          : tab.kind === 'settings'
-            ? 'Settings'
-            : basename(tab.path)}
-      </span>
+      {tab.kind === 'agent' &&
+        (chat?.busy ? (
+          <StatusDot className="text-accent" />
+        ) : (
+          <Icon icon={Bot} className={`${iconSize.sm} text-accent`} />
+        ))}
+      <span className="truncate">{label}</span>
       <button
-        aria-label="Close tab"
+        aria-label={tab.kind === 'agent' ? 'Close chat' : 'Close tab'}
         onMouseDown={(e) => e.stopPropagation()}
         onClick={() => closeTab(tab.id)}
         className="no-drag flex size-4 items-center justify-center rounded hover:bg-border"
@@ -99,6 +117,38 @@ function NewBrowserTabButton({ labelled = false }: { labelled?: boolean }) {
   )
 }
 
+/** New chat and earlier sessions, opened as tabs. */
+function ChatTabButtons() {
+  const hasWorkspace = useWorkspace((s) => !!s.info)
+  const [menu, setMenu] = useState<'new' | 'history' | null>(null)
+  const toggle = (which: 'new' | 'history'): void => setMenu((m) => (m === which ? null : which))
+  return (
+    <div className="relative flex shrink-0 items-center">
+      <button
+        data-testid="tab-new-chat"
+        disabled={!hasWorkspace}
+        title="New chat tab"
+        onClick={() => toggle('new')}
+        className="inline-flex h-full items-center gap-0.5 px-2 text-muted hover:text-fg disabled:opacity-40"
+      >
+        <Icon icon={Plus} className={iconSize.xs} />
+        <Icon icon={Bot} className={iconSize.sm} />
+      </button>
+      <button
+        data-testid="tab-history"
+        disabled={!hasWorkspace}
+        title="Resume an earlier session in a tab"
+        onClick={() => toggle('history')}
+        className="h-full px-2 text-muted hover:text-fg disabled:opacity-40"
+      >
+        <Icon icon={History} className={iconSize.sm} />
+      </button>
+      {menu === 'new' && <NewChatMenu placement="tab" onClose={() => setMenu(null)} />}
+      {menu === 'history' && <HistoryMenu placement="tab" onClose={() => setMenu(null)} />}
+    </div>
+  )
+}
+
 function ActiveTab({ tab }: { tab: Tab }) {
   const buffer = useEditor((s) => s.buffers[tab.path])
   const error = useEditor((s) => s.errors[tab.path])
@@ -109,6 +159,7 @@ function ActiveTab({ tab }: { tab: Tab }) {
   if (tab.kind === 'review') return <ReviewView path={tab.path} />
   if (tab.kind === 'browser') return <BrowserTab tabId={tab.path} />
   if (tab.kind === 'settings') return <SettingsView />
+  if (tab.kind === 'agent') return <AgentTab chatKey={agentTabKey(tab)} />
   if (error)
     return (
       <div className="p-4 text-red-400">
@@ -153,33 +204,29 @@ function ActiveTab({ tab }: { tab: Tab }) {
   )
 }
 
-const CODE_KINDS: TabKind[] = ['file', 'diff', 'review', 'browser', 'settings']
-
 function pickActiveTab(tabs: Tab[], activeId: string | null): Tab | undefined {
   if (!tabs.length) return undefined
   return tabs.find((t) => t.id === activeId) ?? tabs[tabs.length - 1]
 }
 
-export function EditorArea({ kinds = CODE_KINDS }: { kinds?: TabKind[] }) {
-  const allTabs = useEditor((s) => s.tabs)
+/** The main pane: browser, code and chat tabs side by side in one tab bar. */
+export function EditorArea() {
+  const tabs = useEditor((s) => s.tabs)
   const activeId = useEditor((s) => s.activeId)
-  const tabs = allTabs.filter((t) => kinds.includes(t.kind))
-  const globalActive = allTabs.find((t) => t.id === activeId)
-  const scopedActiveId = globalActive && kinds.includes(globalActive.kind) ? activeId : null
-  const active = pickActiveTab(tabs, scopedActiveId)
-
-  const browserOnly = kinds.length === 1 && kinds[0] === 'browser'
+  const active = pickActiveTab(tabs, activeId)
 
   if (!tabs.length) {
-    if (browserOnly) return null
     return (
       <div className="flex h-full items-center justify-center text-muted">
-        <div className="text-center">
+        <div className="w-80 text-center">
           <div className="text-lg text-fg">Lookingglass</div>
-          <div className="mt-1">Open a file from the explorer.</div>
+          <div className="mt-1">Open a page, a file from the explorer, or a chat.</div>
           <ShortcutHints />
           <div className="mt-3">
             <NewBrowserTabButton labelled />
+          </div>
+          <div className="mt-6 text-left">
+            <StartChat placement="tab" testId="welcome-start-agent" />
           </div>
         </div>
       </div>
@@ -188,11 +235,14 @@ export function EditorArea({ kinds = CODE_KINDS }: { kinds?: TabKind[] }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div role="tablist" className="flex h-9 shrink-0 overflow-x-auto border-b border-border bg-panel">
-        {tabs.map((tab) => (
-          <TabLabel key={tab.id} tab={tab} />
-        ))}
+      <div className="flex h-9 shrink-0 border-b border-border bg-panel">
+        <div role="tablist" className="flex min-w-0 overflow-x-auto">
+          {tabs.map((tab) => (
+            <TabLabel key={tab.id} tab={tab} />
+          ))}
+        </div>
         <NewBrowserTabButton />
+        <ChatTabButtons />
       </div>
       <div className="min-h-0 flex-1">{active && <ActiveTab key={active.id} tab={active} />}</div>
     </div>

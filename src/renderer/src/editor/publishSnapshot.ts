@@ -4,14 +4,16 @@ import { isDirty, useEditor } from '../store/editor'
 const DEBOUNCE_MS = 150
 
 function snapshot(): EditorSnapshot {
-  const { activeId, buffers } = useEditor.getState()
-  // Browser and settings tabs aren't files.
-  const tabs = useEditor.getState().tabs.filter((t) => t.kind !== 'browser' && t.kind !== 'settings')
+  const { lastCodeId, buffers } = useEditor.getState()
+  // Browser, settings and chat tabs aren't files.
+  const tabs = useEditor
+    .getState()
+    .tabs.filter((t) => t.kind === 'file' || t.kind === 'diff' || t.kind === 'review')
   const dirty: Record<string, string> = {}
   for (const [path, buffer] of Object.entries(buffers)) if (isDirty(buffer)) dirty[path] = buffer.draft
   return {
     openFiles: [...new Set(tabs.map((t) => t.path))],
-    activeFile: tabs.find((t) => t.id === activeId)?.path ?? null,
+    activeFile: tabs.find((t) => t.id === lastCodeId)?.path ?? null,
     dirty,
   }
 }

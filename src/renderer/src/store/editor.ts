@@ -1,8 +1,18 @@
 import { create } from 'zustand'
 import type { FsChange } from '../../../shared/ipc'
+import { useAgents } from './agents'
 
-/** file = editor, diff = against git HEAD, review = agent changes against their review baseline, settings = the one settings tab. */
-export type TabKind = 'file' | 'diff' | 'review' | 'browser' | 'settings'
+/**
+ * file = editor, diff = against git HEAD, review = agent changes against their review baseline,
+ * settings = the one settings tab, agent = a chat (its `path` is `chat:<key>`).
+ */
+export type TabKind = 'file' | 'diff' | 'review' | 'browser' | 'settings' | 'agent'
+
+/** Tabs that show a workspace file. */
+const CODE_KINDS: TabKind[] = ['file', 'diff', 'review']
+
+export const agentTabPath = (key: number): string => `chat:${key}`
+export const agentTabKey = (tab: Tab): number => Number(tab.path.slice('chat:'.length))
 
 export interface Tab {
   id: string
@@ -34,6 +44,8 @@ export interface RevealTarget {
 interface EditorStore {
   tabs: Tab[]
   activeId: string | null
+  /** The last code tab in front, so "the current file" survives switching to a chat or browser tab. */
+  lastCodeId: string | null
   buffers: Record<string, Buffer>
   loading: Record<string, boolean>
   errors: Record<string, string>
@@ -46,8 +58,13 @@ interface EditorStore {
   /** Browser tabs use their browser tab id as `path`. */
   openBrowser(url: string): Promise<void>
   adoptBrowser(tabId: string): void
+  /** Show a chat as a tab; `activate: false` opens it behind the current tab. */
+  openAgent(key: number, options?: { activate?: boolean }): void
   activate(id: string): void
+  /** Close a tab; closing a chat's tab ends the chat. */
   closeTab(id: string): void
+  /** Drop a tab without side effects (the chat store uses this when a chat closes or moves). */
+  removeTab(id: string): void
   setDraft(path: string, draft: string): void
   save(path?: string): Promise<void>
   reloadFromDisk(path: string): Promise<void>
@@ -56,7 +73,10 @@ interface EditorStore {
   reset(): void
 }
 
-const tabId = (kind: TabKind, path: string): string => `${kind}:${path}`
+export const tabId = (kind: TabKind, path: string): string => `${kind}:${path}`
+
+const codeId = (kind: TabKind, id: string, previous: string | null): string | null =>
+  CODE_KINDS.includes(kind) ? id : previous
 
 export function isDirty(buffer: Buffer | undefined): boolean {
   return !!buffer && buffer.draft !== buffer.saved
@@ -90,17 +110,18 @@ export const useEditor = create<EditorStore>((set, get) => {
     }
   }
 
-  function openTab(kind: TabKind, path: string): void {
+  function openTab(kind: TabKind, path: string, activate = true): void {
     const id = tabId(kind, path)
     set((s) => ({
       tabs: s.tabs.some((t) => t.id === id) ? s.tabs : [...s.tabs, { id, kind, path }],
-      activeId: id,
+      ...(activate || !s.activeId ? { activeId: id, lastCodeId: codeId(kind, id, s.lastCodeId) } : {}),
     }))
   }
 
   return {
     tabs: [],
     activeId: null,
+    lastCodeId: null,
     buffers: {},
     loading: {},
     errors: {},
@@ -134,13 +155,25 @@ export const useEditor = create<EditorStore>((set, get) => {
       openTab('browser', tabId)
     },
 
+    openAgent(key, options) {
+      openTab('agent', agentTabPath(key), options?.activate ?? true)
+    },
+
     activate(id) {
-      set({ activeId: id })
+      set((s) => {
+        const tab = s.tabs.find((t) => t.id === id)
+        return { activeId: id, lastCodeId: tab ? codeId(tab.kind, id, s.lastCodeId) : s.lastCodeId }
+      })
     },
 
     closeTab(id) {
       const closing = get().tabs.find((t) => t.id === id)
+      if (closing?.kind === 'agent') return useAgents.getState().closeChat(agentTabKey(closing))
       if (closing?.kind === 'browser') void window.lookingglass.browser.close(closing.path)
+      get().removeTab(id)
+    },
+
+    removeTab(id) {
       set((s) => {
         const index = s.tabs.findIndex((t) => t.id === id)
         if (index === -1) return s
@@ -228,7 +261,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     reset() {
-      set({ tabs: [], activeId: null, buffers: {}, loading: {}, errors: {}, reveal: null })
+      set({ tabs: [], activeId: null, lastCodeId: null, buffers: {}, loading: {}, errors: {}, reveal: null })
     },
   }
 })

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { SessionHistory } from '../../../shared/agent'
-import { useAgents } from '../store/agents'
+import { useAgents, type ChatPlacement } from '../store/agents'
 import { Chevron, Icon, Loader2, iconSize } from '../ui/icon'
 
 type Loaded = SessionHistory | { error: string }
@@ -18,11 +18,13 @@ function AgentHistory({
   agentId,
   label,
   initiallyOpen,
+  placement,
   onPick,
 }: {
   agentId: string
   label: string
   initiallyOpen: boolean
+  placement: ChatPlacement
   onPick(): void
 }) {
   const [open, setOpen] = useState(initiallyOpen)
@@ -76,7 +78,7 @@ function AgentHistory({
                   title={s.title ?? s.sessionId}
                   onClick={() => {
                     onPick()
-                    void useAgents.getState().openSession(agentId, s.sessionId, s.title)
+                    void useAgents.getState().openSession(agentId, s.sessionId, s.title, placement)
                   }}
                   className="block w-full px-5 py-1 text-left hover:bg-fg/5"
                 >
@@ -93,7 +95,7 @@ function AgentHistory({
 }
 
 /** Past sessions, per agent, from each agent's own history (`session/list`). */
-export function HistoryMenu({ onClose }: { onClose(): void }) {
+export function HistoryMenu({ placement, onClose }: { placement: ChatPlacement; onClose(): void }) {
   const agents = useAgents((s) => s.agents)
   const defaultAgentId = useAgents((s) => s.defaultAgentId)
   return (
@@ -107,6 +109,7 @@ export function HistoryMenu({ onClose }: { onClose(): void }) {
           agentId={agent.id}
           label={agent.label}
           initiallyOpen={agent.id === defaultAgentId}
+          placement={placement}
           onPick={onClose}
         />
       ))}
