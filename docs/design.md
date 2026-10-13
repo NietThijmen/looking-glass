@@ -565,14 +565,20 @@ pnpm package      # installers for the current platform (unsigned for now)
 
 ### Releasing
 
+Releases are built by GitHub Actions (`.github/workflows/release.yml`). Bump `version` in `package.json`, commit, then push a matching tag:
+
 ```bash
-pnpm release      # build, sign, notarize and upload installers to a draft GitHub release
+git tag v0.0.2 && git push origin v0.0.2
 ```
+
+The workflow runs `pnpm check`, creates a draft release with generated notes, builds and uploads the macOS (arm64), Windows and Linux installers in parallel, and publishes the release once all three succeed. Signing and notarization use the repository secrets of the same names as the variables below; without them the installers are unsigned.
+
+`pnpm release` does the same from your own machine for the current platform, uploading to a draft release.
 
 - **macOS signing** uses a "Developer ID Application" certificate from the keychain, or `CSC_LINK` (a .p12, path or base64) with `CSC_KEY_PASSWORD`. Without one the build is unsigned (`pnpm package` still works); `CSC_IDENTITY_AUTO_DISCOVERY=false` forces that. Hardened runtime is on, with the entitlements in `build/entitlements.mac.plist`.
 - **Notarization** runs when `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` (or `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`) are set, and is skipped otherwise.
 - **Windows signing** happens when `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` are set.
-- **Publishing** needs `GH_TOKEN` with access to `NietThijmen/looking-glass`. Releases are created as drafts; publish the draft on GitHub to ship it.
+- **Publishing** needs `GH_TOKEN` with access to `NietThijmen/looking-glass`. `pnpm release` creates drafts; publish the draft on GitHub to ship it.
 - **Auto-update**: packaged builds check GitHub releases at startup and every six hours, download in the background and install on quit. "Check for Updates…" is in the app menu (Help on Windows/Linux). macOS only installs updates for signed builds, so updating starts working from the first signed release.
 
 ### How the skeleton is wired
