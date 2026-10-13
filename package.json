@@ -14,9 +14,10 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "smoke": "electron-vite build --outDir out-smoke && node scripts/smoke.mjs",
+    "smoke": "electron-vite build --mode smoke && node scripts/smoke.mjs",
     "package:dir": "pnpm build && electron-builder --dir",
     "package": "pnpm build && electron-builder",
+    "release": "pnpm build && electron-builder --publish always",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test",
     "smoke:packaged": "node scripts/smoke.mjs release/$npm_package_version/mac-arm64/Lookingglass.app/Contents/MacOS/Lookingglass"
   },
@@ -65,8 +66,10 @@
     "@modelcontextprotocol/sdk": "1.32.1",
     "@parcel/watcher": "^2.6.0",
     "@vscode/ripgrep": "^1.18.0",
+    "electron-updater": "^6.8.9",
     "node-pty": "1.1.0",
     "source-map-js": "^1.2.2",
+    "typescript-language-server": "^5.3.0",
     "zod": "4.6.6"
   }
 }

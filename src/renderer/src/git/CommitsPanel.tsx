@@ -14,7 +14,7 @@ function CommitRow({ entry }: { entry: GitLogEntry }) {
       data-testid="git-commit"
       data-hash={entry.shortHash}
       title={entry.hash}
-      className="border-b border-border px-3 py-2 hover:bg-white/5"
+      className="border-b border-border px-3 py-2 hover:bg-fg/5"
     >
       <div className="flex items-baseline gap-2">
         <span className="shrink-0 font-mono text-[11px] text-accent">{entry.shortHash}</span>
@@ -30,27 +30,29 @@ function CommitRow({ entry }: { entry: GitLogEntry }) {
 export function CommitsPanel() {
   const info = useWorkspace((s) => s.info)
   const git = useWorkspace((s) => s.git)
-  const [commits, setCommits] = useState<GitLogEntry[]>([])
-  const [loading, setLoading] = useState(false)
+  /** null until the first load finishes. */
+  const [commits, setCommits] = useState<GitLogEntry[] | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const load = useCallback(async () => {
+  const load = useCallback(
+    () =>
+      window.lookingglass.git.log(80).then(
+        (list) => setCommits(list),
+        () => setCommits([]),
+      ),
+    [],
+  )
+
+  const refresh = (): void => {
+    setRefreshing(true)
+    void load().finally(() => setRefreshing(false))
+  }
+
+  useEffect(() => {
     if (!info) return
-    setLoading(true)
-    try {
-      const list = await window.lookingglass.git.log(80)
-      setCommits(list)
-    } finally {
-      setLoading(false)
-    }
-  }, [info])
-
-  useEffect(() => {
     void load()
-  }, [load])
-
-  useEffect(() => {
     return window.lookingglass.git.onChanged(() => void load())
-  }, [load])
+  }, [info, load])
 
   if (!info) return <div className="p-3 text-muted">No folder open.</div>
   if (!git) return <div className="p-3 text-muted">This folder isn't a git repository.</div>
@@ -61,17 +63,17 @@ export function CommitsPanel() {
         Commits
         <button
           type="button"
-          onClick={() => void load()}
-          disabled={loading}
+          onClick={refresh}
+          disabled={refreshing}
           className="ml-auto font-normal normal-case text-accent hover:underline disabled:opacity-50"
         >
           Refresh
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto pb-4">
-        {loading && commits.length === 0 && <div className="px-3 text-muted">Loading…</div>}
-        {!loading && commits.length === 0 && <div className="px-3 text-muted">No commits yet.</div>}
-        {commits.map((entry) => (
+        {commits === null && <div className="px-3 text-muted">Loading…</div>}
+        {commits?.length === 0 && <div className="px-3 text-muted">No commits yet.</div>}
+        {commits?.map((entry) => (
           <CommitRow key={entry.hash} entry={entry} />
         ))}
       </div>

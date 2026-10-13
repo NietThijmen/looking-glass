@@ -4,6 +4,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { z } from 'zod'
+import { formatDiagnostics, type DiagnosticsByPath } from '../../shared/diagnostics'
 import type { GitStatus, WorkspaceInfo } from '../../shared/ipc'
 import { registerBrowserTools, type BrowserToolDeps } from '../browser/browserTools'
 import type { EditorState } from '../editor/EditorState'
@@ -13,6 +14,8 @@ export interface EditorMcpDeps {
   editor: EditorState
   gitStatus(): Promise<GitStatus | null>
   openFile(path: string, line?: number): Promise<void>
+  /** Language-server diagnostics: one file (opened on demand), or everything currently known. */
+  diagnostics?(path?: string): Promise<DiagnosticsByPath>
   browser?: BrowserToolDeps
 }
 
@@ -68,6 +71,17 @@ function buildServer(deps: EditorMcpDeps): McpServer {
       return text(`Opened ${path}${line ? `:${line}` : ''}`)
     },
   )
+  const { diagnostics } = deps
+  if (diagnostics)
+    server.registerTool(
+      'get_diagnostics',
+      {
+        description:
+          "Errors and warnings from the editor's language server (TypeScript/JavaScript), including unsaved edits. With a path, checks that file (it doesn't need to be open); without one, lists problems in the files open in the editor. Positions are 1-based.",
+        inputSchema: { path: z.string().optional().describe('Path relative to the workspace root') },
+      },
+      async ({ path }) => text(formatDiagnostics(await diagnostics(path))),
+    )
   if (deps.browser) registerBrowserTools(server, deps.browser)
   return server
 }

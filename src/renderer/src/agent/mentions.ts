@@ -2,7 +2,9 @@ import type { ContentBlock, PromptCapabilities } from '@agentclientprotocol/sdk'
 import { selectionIn } from '../editor/selection'
 import { basename } from '../lib/paths'
 import type { Attachment } from '../store/agents'
+import { formatDiagnostics } from '../../../shared/diagnostics'
 import { consoleAttachment } from '../browser/elementAttachment'
+import { useDiagnostics } from '../store/diagnostics'
 import { useBrowser } from '../store/browser'
 import { useEditor } from '../store/editor'
 import { useUi } from '../store/ui'
@@ -17,6 +19,7 @@ export type MentionOption =
   | { kind: 'git-diff' }
   | { kind: 'browser' }
   | { kind: 'browser-console' }
+  | { kind: 'problems' }
 
 const MAX_OPTIONS = 12
 const TERMINAL_CHARS = 8000
@@ -36,6 +39,8 @@ export function optionLabel(option: MentionOption): string {
       return 'browser'
     case 'browser-console':
       return 'browser-console'
+    case 'problems':
+      return 'problems'
   }
 }
 
@@ -67,6 +72,7 @@ export function mentionOptions(query: string, files: string[]): MentionOption[] 
     { kind: 'git-diff' },
     { kind: 'browser' },
     { kind: 'browser-console' },
+    { kind: 'problems' },
   ]
   const folders = new Set<string>()
   for (const file of files) {
@@ -174,6 +180,15 @@ export async function resolveMention(
       const relevant = entries.filter((e) => e.level === 'error' || e.level === 'warning').slice(-50)
       if (!relevant.length) return { error: 'No browser errors or warnings.' }
       return consoleAttachment(relevant)
+    }
+    case 'problems': {
+      const { byPath, error } = useDiagnostics.getState()
+      if (!Object.keys(byPath).length)
+        return { error: error ? `No diagnostics: ${error.split('\n')[0]}` : 'No problems in the open files.' }
+      return {
+        label: 'problems',
+        blocks: [{ type: 'text', text: `Problems in the open files:\n${formatDiagnostics(byPath)}` }],
+      }
     }
     case 'git-diff': {
       const diff = (await window.lookingglass.git.diff()).trim()

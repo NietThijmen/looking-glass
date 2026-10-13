@@ -7,6 +7,8 @@ import {
   type ContentBlock,
   type CreateTerminalRequest,
   type InitializeResponse,
+  type ListSessionsResponse,
+  type LoadSessionResponse,
   type McpServer,
   type NewSessionResponse,
   type PromptResponse,
@@ -148,6 +150,15 @@ export class AcpClient {
 
   newSession(cwd: string, mcpServers: McpServer[]): Promise<NewSessionResponse> {
     return this.#agent().request(methods.agent.session.new, { cwd, mcpServers })
+  }
+
+  listSessions(cwd: string, cursor?: string): Promise<ListSessionsResponse> {
+    return this.#agent().request(methods.agent.session.list, { cwd, ...(cursor ? { cursor } : {}) })
+  }
+
+  /** The agent replays the session's history as `session/update` notifications before it answers. */
+  loadSession(sessionId: string, cwd: string, mcpServers: McpServer[]): Promise<LoadSessionResponse> {
+    return this.#agent().request(methods.agent.session.load, { sessionId, cwd, mcpServers })
   }
 
   prompt(sessionId: string, prompt: ContentBlock[]): Promise<PromptResponse> {

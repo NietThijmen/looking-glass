@@ -13,6 +13,18 @@
   --font-mono: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
 }
 
+/* Light theme (Settings → Theme). Main sets nativeTheme, so this follows the setting or the OS. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg: #ffffff;
+    --color-panel: #f5f5f5;
+    --color-border: #e5e5e5;
+    --color-fg: #171717;
+    --color-muted: #737373;
+    --color-accent: #0077d9;
+  }
+}
+
 html,
 body,
 #root {
@@ -76,7 +88,7 @@ body {
 .markdown code {
   font-family: var(--font-mono);
   font-size: 0.92em;
-  background: rgb(255 255 255 / 0.07);
+  background: color-mix(in srgb, var(--color-fg) 7%, transparent);
   border-radius: 3px;
   padding: 0.05em 0.3em;
 }

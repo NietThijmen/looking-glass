@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { ConsoleEntry, Picked, PickedElement } from '../../../shared/browser'
+import type { ConsoleEntry, Picked } from '../../../shared/browser'
 import { useAgents } from '../store/agents'
 import { useBrowser } from '../store/browser'
+import { useShortcut } from '../store/settings'
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
@@ -12,21 +14,17 @@ import {
   Icon,
   RotateCw,
   Settings,
+  SquareDashed,
   StatusDot,
   X,
   XCircle,
   iconSize,
 } from '../ui/icon'
-import { consoleAttachment, elementLabel, pickedAttachment } from './elementAttachment'
+import { consoleAttachment, pickedAttachment, pickedLabel } from './elementAttachment'
 
-function lastPickedElement(items: Picked[] | undefined): PickedElement | null {
-  if (!items) return null
-  for (let i = items.length - 1; i >= 0; i--) {
-    const item = items[i]
-    if (item?.kind === 'element') return item
-  }
-  return null
-}
+const NO_PICKS: Picked[] = []
+/** Recent console errors offered (unticked) with the last picked item. */
+const MAX_PICK_ERRORS = 20
 
 const DEVICES = [
   { id: 'fill', label: 'Fit', size: null },
@@ -46,9 +44,10 @@ function Toolbar({ tabId }: { tabId: string }) {
   const [editing, setEditing] = useState(false)
   const api = window.lookingglass.browser
   const shown = editing ? url : (state?.url ?? '')
+  const pickHint = useShortcut('toggle-picker')
 
   const button =
-    'flex size-6 items-center justify-center rounded text-muted hover:bg-white/10 hover:text-fg disabled:opacity-30'
+    'flex size-6 items-center justify-center rounded text-muted hover:bg-fg/10 hover:text-fg disabled:opacity-30'
   return (
     <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border bg-panel px-2">
       <button
@@ -94,12 +93,22 @@ function Toolbar({ tabId }: { tabId: string }) {
       />
       <button
         data-testid="picker-toggle"
-        title="Pick an element (⇧⌘C)"
+        title={`Pick an element (${pickHint})`}
         aria-pressed={state?.picking}
         onClick={() => void api.setPicking(tabId, !state?.picking)}
         className={`${button} ${state?.picking ? 'bg-accent/30 text-fg' : ''}`}
       >
         <Icon icon={Crosshair} className={iconSize.md} />
+      </button>
+      <button
+        data-testid="region-capture"
+        title="Capture a region (⇧-click to add to the selection)"
+        aria-pressed={state?.capturing}
+        disabled={state?.capturing}
+        onClick={() => void api.captureRegion(tabId)}
+        className={`${button} ${state?.capturing ? 'bg-accent/30 text-fg' : ''}`}
+      >
+        <Icon icon={SquareDashed} className={iconSize.md} />
       </button>
       <button className={button} title="Open DevTools" onClick={() => void api.openDevTools(tabId)}>
         <Icon icon={Settings} className={iconSize.md} />
@@ -108,30 +117,54 @@ function Toolbar({ tabId }: { tabId: string }) {
   )
 }
 
-function PickedBar({ tabId, element }: { tabId: string; element: PickedElement }) {
+function PickedBar({ tabId, items }: { tabId: string; items: Picked[] }) {
   const [question, setQuestion] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => inputRef.current?.focus(), [element])
+  const last = items.at(-1)
+  useEffect(() => inputRef.current?.focus(), [last])
+  if (!last) return null
 
-  const dismiss = (): void => {
-    useBrowser.getState().unpick(tabId)
-    void window.lookingglass.browser.unpick(tabId)
+  const api = window.lookingglass.browser
+  const dismiss = (index?: number): void => {
+    useBrowser.getState().unpick(tabId, index)
+    void api.unpick(tabId, index)
   }
-  const source = element.sources[0]
+  const walk = (direction: 'parent' | 'child'): void => void api.walk(tabId, direction)
+  const attachments = (): ReturnType<typeof pickedAttachment>[] => {
+    const errors = (useBrowser.getState().console[tabId] ?? [])
+      .filter((e) => e.level === 'error')
+      .slice(-MAX_PICK_ERRORS)
+    return items.map((item, i) => pickedAttachment(item, activeCaps(), i === items.length - 1 ? errors : []))
+  }
+  const source = last.kind === 'element' ? last.sources[0] : undefined
+  const subject = items.length > 1 ? 'these' : last.kind === 'region' ? 'this region' : 'this element'
+  const walkButton = 'inline-flex items-center gap-0.5 text-muted hover:text-fg'
 
   return (
     <div className="shrink-0 border-b border-border bg-panel px-2 py-1.5" data-testid="picked-bar">
       <div className="mb-1 flex items-center gap-2 text-[11px]">
-        <span
-          className="inline-flex items-center gap-1 rounded bg-accent/20 px-1.5 font-mono text-fg"
-          data-testid="picked-label"
-        >
-          <Icon icon={Crosshair} className={iconSize.xs} />
-          {elementLabel(element)}
-        </span>
-        <span className="text-muted">
-          {element.rect.width}×{element.rect.height}
-        </span>
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
+          {items.map((item, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1 rounded bg-accent/20 px-1.5 font-mono text-fg"
+              data-testid="picked-label"
+            >
+              <Icon icon={item.kind === 'region' ? SquareDashed : Crosshair} className={iconSize.xs} />
+              {pickedLabel(item)}
+              {items.length > 1 && (
+                <button aria-label="Remove" className="text-muted hover:text-fg" onClick={() => dismiss(i)}>
+                  <Icon icon={X} className={iconSize.xs} />
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+        {last.kind === 'element' && (
+          <span className="shrink-0 text-muted">
+            {last.rect.width}×{last.rect.height}
+          </span>
+        )}
         {source && (
           <span className="truncate font-mono text-muted" title={`via ${source.via}`}>
             {source.via === 'search' ? 'maybe ' : ''}
@@ -140,15 +173,23 @@ function PickedBar({ tabId, element }: { tabId: string; element: PickedElement }
           </span>
         )}
         <span className="ml-auto" />
-        <button
-          title="Select the parent element"
-          className="inline-flex items-center gap-0.5 text-muted hover:text-fg"
-          onClick={() => void window.lookingglass.browser.walk(tabId, 'parent')}
-        >
-          <Icon icon={ArrowUp} className={iconSize.xs} />
-          parent
-        </button>
-        <button title="Clear" className="text-muted hover:text-fg" onClick={dismiss}>
+        {last.kind === 'element' && (
+          <>
+            <button
+              title="Select the parent element (↑)"
+              className={walkButton}
+              onClick={() => walk('parent')}
+            >
+              <Icon icon={ArrowUp} className={iconSize.xs} />
+              parent
+            </button>
+            <button title="Select a child element (↓)" className={walkButton} onClick={() => walk('child')}>
+              <Icon icon={ArrowDown} className={iconSize.xs} />
+              child
+            </button>
+          </>
+        )}
+        <button title="Clear" className="text-muted hover:text-fg" onClick={() => dismiss()}>
           <Icon icon={X} className={iconSize.sm} />
         </button>
       </div>
@@ -156,19 +197,26 @@ function PickedBar({ tabId, element }: { tabId: string; element: PickedElement }
         ref={inputRef}
         data-testid="ask-element"
         value={question}
-        placeholder="Ask about this element…  (Enter: send · ⌘Enter: new chat · Esc: add to chat)"
+        placeholder={`Ask about ${subject}…  (Enter: send · ⌘Enter: new chat · Esc: add to chat · ↑↓: parent/child)`}
         onChange={(e) => setQuestion(e.target.value)}
         onKeyDown={(e) => {
-          const attachment = (): ReturnType<typeof pickedAttachment> =>
-            pickedAttachment(element, activeCaps())
-          if (e.key === 'Enter' && question.trim()) {
+          // Plain arrows walk while the question is empty; ⌥ arrows walk any time.
+          const arrows = e.key === 'ArrowUp' || e.key === 'ArrowDown'
+          if (arrows && last.kind === 'element' && (e.altKey || !question)) {
             e.preventDefault()
-            void useAgents.getState().ask(question, [attachment()], { newChat: e.metaKey || e.ctrlKey })
+            walk(e.key === 'ArrowUp' ? 'parent' : 'child')
+          } else if (e.key === 'Enter' && question.trim()) {
+            e.preventDefault()
+            void useAgents.getState().ask(question, attachments(), { newChat: e.metaKey || e.ctrlKey })
             setQuestion('')
             dismiss()
           } else if (e.key === 'Escape') {
             e.preventDefault()
-            void useAgents.getState().addPending(attachment())
+            // One at a time: the first may start a chat the rest should join.
+            const pending = attachments()
+            void (async () => {
+              for (const a of pending) await useAgents.getState().addPending(a)
+            })()
             dismiss()
           }
         }}
@@ -193,7 +241,10 @@ function ConsolePanel({ tabId }: { tabId: string }) {
   return (
     <div className="shrink-0 border-t border-border bg-panel" data-testid="browser-console">
       <div className="flex h-7 items-center gap-3 px-2 text-[11px]">
-        <button className="inline-flex items-center gap-1 text-muted hover:text-fg" onClick={() => setOpen((v) => !v)}>
+        <button
+          className="inline-flex items-center gap-1 text-muted hover:text-fg"
+          onClick={() => setOpen((v) => !v)}
+        >
           <Chevron open={open} />
           CONSOLE
         </button>
@@ -303,7 +354,7 @@ function AgentBanner({ tabId }: { tabId: string }) {
  */
 export function BrowserTab({ tabId }: { tabId: string }) {
   const viewportRef = useRef<HTMLDivElement>(null)
-  const picked = useBrowser((s) => lastPickedElement(s.picked[tabId]))
+  const picked = useBrowser((s) => s.picked[tabId] ?? NO_PICKS)
   const [device, setDevice] = useState<(typeof DEVICES)[number]['id']>('fill')
 
   useEffect(() => {
@@ -335,8 +386,8 @@ export function BrowserTab({ tabId }: { tabId: string }) {
     <div className="flex h-full flex-col" data-testid="browser-tab" data-tab-id={tabId}>
       <Toolbar tabId={tabId} />
       <AgentBanner tabId={tabId} />
-      {picked && <PickedBar tabId={tabId} element={picked} />}
-      <div className="flex min-h-0 flex-1 items-start justify-center overflow-hidden bg-[#1f1f1f]">
+      {picked.length > 0 && <PickedBar tabId={tabId} items={picked} />}
+      <div className="flex min-h-0 flex-1 items-start justify-center overflow-hidden bg-panel">
         <div
           ref={viewportRef}
           data-testid="browser-viewport"
@@ -351,7 +402,7 @@ export function BrowserTab({ tabId }: { tabId: string }) {
           <button
             key={d.id}
             onClick={() => setDevice(d.id)}
-            className={`rounded px-1.5 ${device === d.id ? 'bg-white/10 text-fg' : 'text-muted hover:text-fg'}`}
+            className={`rounded px-1.5 ${device === d.id ? 'bg-fg/10 text-fg' : 'text-muted hover:text-fg'}`}
           >
             {d.label}
           </button>

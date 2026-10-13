@@ -32,16 +32,23 @@ function clamp(n: number, min: number, max: number): number {
 
 export function normalizeWorkbenchLayout(raw: Partial<WorkbenchLayout> | null | undefined): WorkbenchLayout {
   const base = DEFAULT_WORKBENCH_LAYOUT
-  const order = raw?.columnOrder?.filter((c): c is WorkbenchColumn =>
-    c === 'editor' || c === 'agent' || c === 'browser',
+  const order = raw?.columnOrder?.filter(
+    (c): c is WorkbenchColumn => c === 'editor' || c === 'agent' || c === 'browser',
   )
-  const columnOrder =
-    order && order.length === 3 && new Set(order).size === 3 ? order : [...base.columnOrder]
+  const columnOrder = order && order.length === 3 && new Set(order).size === 3 ? order : [...base.columnOrder]
   return {
     columnOrder,
     agentWidth: clamp(raw?.agentWidth ?? base.agentWidth, LAYOUT_LIMITS.agent.min, LAYOUT_LIMITS.agent.max),
-    browserWidth: clamp(raw?.browserWidth ?? base.browserWidth, LAYOUT_LIMITS.browser.min, LAYOUT_LIMITS.browser.max),
-    sidebarWidth: clamp(raw?.sidebarWidth ?? base.sidebarWidth, LAYOUT_LIMITS.sidebar.min, LAYOUT_LIMITS.sidebar.max),
+    browserWidth: clamp(
+      raw?.browserWidth ?? base.browserWidth,
+      LAYOUT_LIMITS.browser.min,
+      LAYOUT_LIMITS.browser.max,
+    ),
+    sidebarWidth: clamp(
+      raw?.sidebarWidth ?? base.sidebarWidth,
+      LAYOUT_LIMITS.sidebar.min,
+      LAYOUT_LIMITS.sidebar.max,
+    ),
     terminalHeight: clamp(
       raw?.terminalHeight ?? base.terminalHeight,
       LAYOUT_LIMITS.terminal.min,

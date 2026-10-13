@@ -5,7 +5,16 @@ import { baseOptions } from '../editor/diffsConfig'
 import { useEditor } from '../store/editor'
 import { useUi } from '../store/ui'
 import { useWorkspace } from '../store/workspace'
-import { Chevron, Icon, Paperclip, PlanStatusIcon, RotateCcw, Terminal, iconSize, toolKindIcon } from '../ui/icon'
+import {
+  Chevron,
+  Icon,
+  Paperclip,
+  PlanStatusIcon,
+  RotateCcw,
+  Terminal,
+  iconSize,
+  toolKindIcon,
+} from '../ui/icon'
 import { Markdown } from './Markdown'
 import { blockText, type PlanState, type ToolCallState, type TranscriptItem } from './transcript'
 
@@ -172,7 +181,7 @@ const Item = memo(function Item({
   switch (item.kind) {
     case 'user':
       return (
-        <div className="group relative ml-6 rounded-lg bg-white/5 px-3 py-2" data-testid="user-message">
+        <div className="group relative ml-6 rounded-lg bg-fg/5 px-3 py-2" data-testid="user-message">
           {item.checkpoint && (
             <button
               data-testid="restore-checkpoint"
@@ -181,7 +190,7 @@ const Item = memo(function Item({
                 if (window.confirm('Restore all files to how they were before this message?'))
                   onRestore(item.id)
               }}
-              className="absolute top-1 right-1 hidden rounded px-1.5 text-[10px] text-muted group-hover:block hover:bg-white/10 hover:text-fg"
+              className="absolute top-1 right-1 hidden rounded px-1.5 text-[10px] text-muted group-hover:block hover:bg-fg/10 hover:text-fg"
             >
               <span className="inline-flex items-center gap-0.5">
                 <Icon icon={RotateCcw} className={iconSize.xs} />

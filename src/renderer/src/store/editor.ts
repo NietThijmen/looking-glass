@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import type { FsChange } from '../../../shared/ipc'
 
-/** file = editor, diff = against git HEAD, review = agent changes against their review baseline. */
-export type TabKind = 'file' | 'diff' | 'review' | 'browser'
+/** file = editor, diff = against git HEAD, review = agent changes against their review baseline, settings = the one settings tab. */
+export type TabKind = 'file' | 'diff' | 'review' | 'browser' | 'settings'
 
 export interface Tab {
   id: string
@@ -42,6 +42,7 @@ interface EditorStore {
   openFile(path: string, reveal?: { line: number; column: number }): Promise<void>
   openDiff(path: string): Promise<void>
   openReview(path: string): void
+  openSettings(): void
   /** Browser tabs use their browser tab id as `path`. */
   openBrowser(url: string): Promise<void>
   adoptBrowser(tabId: string): void
@@ -118,6 +119,10 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     openReview(path) {
       openTab('review', path)
+    },
+
+    openSettings() {
+      openTab('settings', 'settings')
     },
 
     async openBrowser(url) {

@@ -24,6 +24,11 @@ export interface Chat {
   busy: boolean
   modes: SessionModeState | null
   promptCapabilities: PromptCapabilities
+  /** The agent can `session/load` this chat's session. */
+  canResume: boolean
+  /** A session to load instead of starting a new one: picked from history, or lost when the agent stopped. */
+  resumeId?: string
+  title?: string
 }
 
 /** Something attached to a message: a chip label plus the content blocks it sends. */
@@ -62,7 +67,10 @@ interface AgentsStore {
   defaultAgentId: string
 
   loadAgents(): Promise<void>
-  newChat(agentId?: string): Promise<void>
+  /** Start a chat (and make it active); resolves once its session is ready or failed. */
+  newChat(agentId?: string, options?: { title?: string }): Promise<number>
+  /** Open a past session from the agent's history (or switch to it if it's already open). */
+  openSession(agentId: string, sessionId: string, title?: string | null): Promise<void>
   retryChat(key: number): Promise<void>
   closeChat(key: number): void
   activate(key: number): void
@@ -98,22 +106,57 @@ export const useAgents = create<AgentsStore>((set, get) => {
   async function startSession(key: number): Promise<void> {
     const chat = get().chats.find((c) => c.key === key)
     if (!chat) return
-    patch(key, { state: 'starting', error: undefined, auth: undefined })
+    const resumeId = chat.resumeId
+    // A loaded session replays its whole history, so start from an empty transcript. The
+    // session id is set first so the replayed updates land in this chat.
+    patch(key, {
+      state: 'starting',
+      error: undefined,
+      auth: undefined,
+      ...(resumeId ? { sessionId: resumeId, items: [] } : {}),
+    })
     try {
-      const result = await window.lookingglass.agent.newSession(chat.agentId)
+      const result = resumeId
+        ? await window.lookingglass.agent.loadSession(chat.agentId, resumeId)
+        : await window.lookingglass.agent.newSession(chat.agentId)
       if ('authRequired' in result) {
-        patch(key, { state: 'auth', auth: result })
+        patch(key, { state: 'auth', auth: result, ...(resumeId ? { sessionId: null } : {}) })
       } else {
-        patch(key, {
+        patch(key, (c) => ({
           state: 'ready',
           sessionId: result.sessionId,
+          resumeId: undefined,
           modes: result.modes ?? null,
           promptCapabilities: result.promptCapabilities,
-        })
+          canResume: result.canResume,
+          items: resumeId ? [...c.items, notice('Resumed an earlier session.')] : c.items,
+        }))
       }
     } catch (error) {
-      patch(key, { state: 'error', error: error instanceof Error ? error.message : String(error) })
+      patch(key, {
+        state: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        ...(resumeId ? { sessionId: null } : {}),
+      })
     }
+  }
+
+  function addChat(agentId: string, extra: Partial<Chat> = {}): number {
+    const key = nextKey++
+    const chat: Chat = {
+      key,
+      agentId,
+      sessionId: null,
+      state: 'starting',
+      items: [],
+      busy: false,
+      modes: null,
+      promptCapabilities: {},
+      canResume: false,
+      ...extra,
+    }
+    set((s) => ({ chats: [...s.chats, chat], activeKey: key, defaultAgentId: agentId }))
+    return key
   }
 
   return {
@@ -134,21 +177,19 @@ export const useAgents = create<AgentsStore>((set, get) => {
       }))
     },
 
-    async newChat(agentId) {
-      const id = agentId ?? get().defaultAgentId
-      const key = nextKey++
-      const chat: Chat = {
-        key,
-        agentId: id,
-        sessionId: null,
-        state: 'starting',
-        items: [],
-        busy: false,
-        modes: null,
-        promptCapabilities: {},
-      }
-      set((s) => ({ chats: [...s.chats, chat], activeKey: key, defaultAgentId: id }))
+    async newChat(agentId, options) {
+      const key = addChat(agentId ?? get().defaultAgentId, options?.title ? { title: options.title } : {})
       await startSession(key)
+      return key
+    },
+
+    async openSession(agentId, sessionId, title) {
+      const open = get().chats.find((c) => c.sessionId === sessionId || c.resumeId === sessionId)
+      if (open) {
+        set({ activeKey: open.key })
+        return
+      }
+      await startSession(addChat(agentId, { resumeId: sessionId, ...(title ? { title } : {}) }))
     },
 
     retryChat: startSession,
@@ -268,6 +309,8 @@ export const useAgents = create<AgentsStore>((set, get) => {
                   state: 'error',
                   busy: false,
                   sessionId: null,
+                  // Retry picks the conversation back up when the agent can load it.
+                  ...(c.canResume && c.sessionId ? { resumeId: c.sessionId } : {}),
                   error: status.state === 'error' ? status.message : 'The agent stopped.',
                 }
               : c,

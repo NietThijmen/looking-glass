@@ -41,3 +41,14 @@ export function selectionIn(path: string): SelectionInfo | null {
   picked[0] = picked[0]!.slice(start.character)
   return { path, startLine: start.line + 1, endLine: end.line + 1, text: picked.join('\n') }
 }
+
+/** The selection in `path`'s editor, or the caret's whole line when nothing is selected. */
+export function selectionOrLine(path: string): SelectionInfo | null {
+  const selected = selectionIn(path)
+  if (selected) return selected
+  const editor = editors.get(path)
+  const caret = editor?.getViewState().selections?.[0]?.start
+  if (!editor || !caret) return null
+  const text = editor.getText().split('\n')[caret.line] ?? ''
+  return { path, startLine: caret.line + 1, endLine: caret.line + 1, text }
+}

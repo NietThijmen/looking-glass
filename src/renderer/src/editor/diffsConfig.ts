@@ -5,7 +5,8 @@ export const THEME = { dark: 'pierre-dark', light: 'pierre-light' } as const
 /** Shared look for every @pierre/diffs surface. */
 export const baseOptions = {
   theme: THEME,
-  themeType: 'dark',
+  // Follows prefers-color-scheme, which main sets from the theme setting.
+  themeType: 'system',
   overflow: 'scroll',
   disableFileHeader: true,
 } as const

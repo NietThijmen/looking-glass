@@ -31,9 +31,7 @@ export function pickedAttachment(
   consoleErrors: ConsoleEntry[] = [],
 ): Attachment {
   const parts: AttachmentPart[] = []
-  const noImages = caps.image
-    ? ''
-    : '\n(The screenshot is not included: this agent does not accept images.)'
+  const noImages = caps.image ? '' : '\n(The screenshot is not included: this agent does not accept images.)'
 
   if (item.kind === 'region') {
     parts.push({ label: 'Summary', blocks: text(describeRegion(item) + noImages), on: true, locked: true })

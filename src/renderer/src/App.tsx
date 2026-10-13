@@ -1,4 +1,5 @@
 import { EditProvider } from '@pierre/diffs/react'
+import { openInlineEdit } from './agent/inlineEdit'
 import { GitBranch, Icon, iconSize } from './ui/icon'
 import { useEffect, useState } from 'react'
 import type { AppInfo, MenuCommand, WindowState } from '../../shared/ipc'
@@ -11,6 +12,8 @@ import { Workbench } from './layout/Workbench'
 import { useAgents } from './store/agents'
 import { useBrowser } from './store/browser'
 import { useEditor } from './store/editor'
+import { useDiagnostics } from './store/diagnostics'
+import { useSettings } from './store/settings'
 import { useReview } from './store/review'
 import { useUi } from './store/ui'
 import { useWorkspace } from './store/workspace'
@@ -46,6 +49,12 @@ function runMenuCommand(command: MenuCommand): void {
     case 'new-browser-tab':
       openBrowserTab()
       break
+    case 'inline-edit':
+      openInlineEdit()
+      break
+    case 'open-settings':
+      editor.openSettings()
+      break
     case 'toggle-picker': {
       const tab = editor.tabs.find((t) => t.id === editor.activeId)
       const tabId = tab?.kind === 'browser' ? tab.path : useBrowser.getState().lastTabId
@@ -70,6 +79,7 @@ function useBoot(): boolean {
         // Agents are bound to the old folder and have been stopped by main.
         useAgents.getState().reset()
         useBrowser.getState().reset()
+        useDiagnostics.getState().reset()
         void useReview.getState().load()
         void useWorkspace.getState().setWorkspace(info)
       }),
@@ -79,6 +89,7 @@ function useBoot(): boolean {
       }),
       api.git.onChanged(() => void useWorkspace.getState().refreshGit()),
       api.review.onChanged((entries) => useReview.getState().set(entries)),
+      api.diagnostics.onChanged(({ path, diagnostics }) => useDiagnostics.getState().set(path, diagnostics)),
       api.browser.onState((state) => useBrowser.getState().setState(state)),
       api.browser.onConsole(({ tabId, entry }) => useBrowser.getState().addConsole(tabId, entry)),
       api.browser.onPicked(({ item, mode }) => useBrowser.getState().applyPick(item, mode)),
@@ -97,9 +108,12 @@ function useBoot(): boolean {
       api.agent.onStatus(({ agentId, status }) => useAgents.getState().setStatus(agentId, status)),
       api.agent.onPermission((request) => useAgents.getState().addPermission(request)),
       api.agent.onPermissionResolved(({ requestId }) => useAgents.getState().removePermission(requestId)),
+      api.settings.onChanged((settings) => useSettings.getState().apply(settings)),
+      api.settings.onAgentsChanged(() => void useAgents.getState().loadAgents()),
       publishEditorSnapshots(),
     ]
     void useAgents.getState().loadAgents()
+    void useSettings.getState().load()
     void api.workspace
       .get()
       .then((info) => workspace.setWorkspace(info))

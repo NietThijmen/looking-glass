@@ -17,8 +17,11 @@ import type {
   PermissionReply,
   PermissionRequest,
   PromptResult,
+  SessionHistory,
   SessionUpdate,
 } from './agent'
+import type { Diagnostic, DiagnosticsByPath } from './diagnostics'
+import type { CustomAgentConfig, UserSettings } from './settings'
 import type {
   BrowserBounds,
   BrowserTabState,
@@ -170,6 +173,8 @@ export type MenuCommand =
   | 'show-commits'
   | 'toggle-picker'
   | 'new-browser-tab'
+  | 'inline-edit'
+  | 'open-settings'
 
 /** Renderer → main request/response channels. */
 export interface InvokeContract {
@@ -199,9 +204,21 @@ export interface InvokeContract {
 
   'editor:snapshot': { args: [snapshot: EditorSnapshot]; result: void }
 
+  'settings:get': { args: []; result: UserSettings }
+  'settings:set': { args: [patch: Partial<UserSettings>]; result: UserSettings }
+  /** Custom agents from ~/.lookingglass/agents.json, with a parse error if the file is broken. */
+  'agents:readConfig': {
+    args: []
+    result: { path: string; agents: CustomAgentConfig[]; error: string | null }
+  }
+  'agents:writeConfig': { args: [agents: CustomAgentConfig[]]; result: void }
   'agent:list': { args: []; result: AgentSummary[] }
   'agent:status': { args: [agentId: string]; result: AgentStatus }
   'agent:newSession': { args: [agentId: string]; result: NewSessionResult | AuthRequired }
+  /** Past sessions in this workspace, newest first (`session/list`). */
+  'agent:listSessions': { args: [agentId: string]; result: SessionHistory }
+  /** Resume a past session (`session/load`); its history arrives as `agent:update` events first. */
+  'agent:loadSession': { args: [agentId: string, sessionId: string]; result: NewSessionResult | AuthRequired }
   'agent:authenticate': { args: [agentId: string, methodId: string]; result: void }
   'agent:prompt': { args: [sessionId: string, prompt: ContentBlock[]]; result: PromptResult }
   'agent:cancel': { args: [sessionId: string]; result: void }
@@ -211,6 +228,8 @@ export interface InvokeContract {
 
   'app:openExternal': { args: [url: string]; result: void }
 
+  /** Current diagnostics for files open in the language server, plus why there are none if it failed. */
+  'diagnostics:all': { args: []; result: { diagnostics: DiagnosticsByPath; error: string | null } }
   'review:list': { args: []; result: ReviewEntry[] }
   /** Baseline contents of a file under review; null when the file didn't exist (or isn't under review). */
   'review:base': { args: [path: string]; result: string | null }
@@ -259,6 +278,10 @@ export interface EventContract {
   /** A terminal main started on its own (e.g. an agent login), for the panel to show. */
   'terminal:opened': TerminalInfo
   'review:changed': ReviewEntry[]
+  'diagnostics:changed': { path: string; diagnostics: Diagnostic[] }
+  'settings:changed': UserSettings
+  /** agents.json was rewritten; the agent list may have changed. */
+  'agents:changed': null
   'browser:state': BrowserTabState
   'browser:console': { tabId: string; entry: ConsoleEntry }
   'browser:picked': { item: Picked; mode: PickMode }
@@ -350,6 +373,18 @@ export interface LookingglassApi {
     onPicked(listener: Listener<'browser:picked'>): Unsubscribe
     onOpened(listener: Listener<'browser:opened'>): Unsubscribe
   }
+  settings: {
+    get(): Promise<UserSettings>
+    set(patch: Partial<UserSettings>): Promise<UserSettings>
+    readAgents(): Promise<{ path: string; agents: CustomAgentConfig[]; error: string | null }>
+    writeAgents(agents: CustomAgentConfig[]): Promise<void>
+    onChanged(listener: Listener<'settings:changed'>): Unsubscribe
+    onAgentsChanged(listener: Listener<'agents:changed'>): Unsubscribe
+  }
+  diagnostics: {
+    all(): Promise<{ diagnostics: DiagnosticsByPath; error: string | null }>
+    onChanged(listener: Listener<'diagnostics:changed'>): Unsubscribe
+  }
   review: {
     list(): Promise<ReviewEntry[]>
     base(path: string): Promise<string | null>
@@ -364,6 +399,8 @@ export interface LookingglassApi {
     list(): Promise<AgentSummary[]>
     status(agentId: string): Promise<AgentStatus>
     newSession(agentId: string): Promise<NewSessionResult | AuthRequired>
+    listSessions(agentId: string): Promise<SessionHistory>
+    loadSession(agentId: string, sessionId: string): Promise<NewSessionResult | AuthRequired>
     authenticate(agentId: string, methodId: string): Promise<void>
     prompt(sessionId: string, prompt: ContentBlock[]): Promise<PromptResult>
     cancel(sessionId: string): Promise<void>

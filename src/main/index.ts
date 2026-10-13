@@ -4,7 +4,10 @@ import { registerAgentHandlers, startAgentServices, stopAgentServices } from './
 import { registerAppHandlers } from './ipc/app'
 import { registerBrowserHandlers } from './ipc/browser'
 import { closeWorkspace, openWorkspace, registerWorkspaceHandlers, terminals } from './ipc/workspace'
+import { registerSettingsHandlers } from './ipc/settings'
 import { installMenu } from './menu'
+import { loadSettings } from './state/settings'
+import { startAutoUpdates } from './updater'
 import { applyHardening } from './security/hardening'
 import { registerAppScheme, serveRenderer } from './security/protocol'
 import { runSmokeTest } from './smoke'
@@ -12,6 +15,9 @@ import { loadAppState } from './state/appState'
 import { createMainWindow } from './window'
 
 app.setName('Lookingglass')
+// Smoke runs change settings and app state; keep that away from the real profile.
+const smokeUserData = process.env['LOOKINGGLASS_SMOKE_USER_DATA']
+if (isSmokeTest && smokeUserData) app.setPath('userData', smokeUserData)
 registerAppScheme()
 
 /** Explicit workspace from `LOOKINGGLASS_WORKSPACE`, else (outside smoke runs) the last one opened. */
@@ -39,8 +45,11 @@ if (!isSmokeTest && !app.requestSingleInstanceLock()) {
     registerWorkspaceHandlers()
     registerAgentHandlers()
     registerBrowserHandlers()
+    registerSettingsHandlers()
     await startAgentServices()
+    await loadSettings()
     installMenu()
+    startAutoUpdates()
 
     const root = await initialWorkspace()
     if (root) {

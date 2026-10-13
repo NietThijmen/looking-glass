@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from 'electron'
+import { app, Menu, type BrowserWindow } from 'electron'
 import fs from 'node:fs/promises'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -49,9 +49,10 @@ const helpers = `
     },
     click: (selector) => { const el = document.querySelector(selector); el?.click(); return !!el },
     treeRoot: () => document.querySelector('[data-testid="explorer"]')?.shadowRoot ?? null,
+    // @pierre/trees writes directory paths with a trailing slash ("src/").
     treeItem: (path) => {
       const root = window.__lg.treeRoot()
-      return root?.querySelector('[data-item-path="' + path + '"]') ?? null
+      return root?.querySelector('[data-item-path="' + path + '"], [data-item-path="' + path + '/"]') ?? null
     },
     clickTree: (path) => {
       const el = window.__lg.treeItem(path)
@@ -267,18 +268,26 @@ const workspaceChecks: Record<string, Check> = {
   'element picker collects element context': async (win, page) => {
     const contents = browserContents()
     if (!contents) return false
+    // Inspect mode and the page's layout settle asynchronously: wait for both, and retry the click.
+    const tabId = browser.tabs().find((t) => t.url.includes('/site/'))?.tabId
+    if (!tabId) return false
     await page(`__lg.click('[data-testid="picker-toggle"]')`)
-    await new Promise((r) => setTimeout(r, 300))
-    const point = (await contents.executeJavaScript(
-      `(() => { const r = document.querySelector('[data-testid="cta"]').getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } })()`,
-    )) as { x: number; y: number }
-    contents.sendInputEvent({ type: 'mouseMove', x: point.x, y: point.y })
-    await new Promise((r) => setTimeout(r, 100))
-    contents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: 1 })
-    contents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: 1 })
-    const ok = await page(
-      `__lg.waitFor(() => document.querySelector('[data-testid="picked-label"]')?.textContent.includes('<button.cta>'), 10000)`,
-    )
+    let ok: unknown = false
+    for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+      const end = Date.now() + 5000
+      while (!browser.state(tabId).picking && Date.now() < end) await new Promise((r) => setTimeout(r, 50))
+      const point = (await contents.executeJavaScript(
+        `new Promise((resolve) => requestAnimationFrame(() => { const r = document.querySelector('[data-testid="cta"]').getBoundingClientRect(); resolve({ x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }) }))`,
+      )) as { x: number; y: number }
+      contents.sendInputEvent({ type: 'mouseMove', x: point.x, y: point.y })
+      await new Promise((r) => setTimeout(r, 150))
+      contents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: 1 })
+      contents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: 1 })
+      ok = await page(
+        `__lg.waitFor(() => document.querySelector('[data-testid="picked-label"]')?.textContent.includes('<button.cta>'), 4000)`,
+      )
+      if (!ok && !browser.state(tabId).picking) await browser.setPicking(tabId, true)
+    }
     const first = browser.selection()[0]
     const picked = first?.kind === 'element' ? first : undefined
     console.log(
@@ -291,14 +300,15 @@ const workspaceChecks: Record<string, Check> = {
       picked.sources.length > 0
     )
   },
-  'asking about an element sends it to the agent': async (win, page) => {
-    await page(`document.querySelector('[data-testid="ask-element"]').focus()`)
-    win.webContents.insertText('why is this blue')
-    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' })
-    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' })
-    return page(`__lg.waitFor(() => [...document.querySelectorAll('[data-testid="agent-message"]')]
-      .some((m) => m.textContent.includes('why is this blue') && m.textContent.includes('[data-testid')), 10000)`)
+  'walking to the parent and back down returns to the picked element': async () => {
+    const tabId = browser.selection()[0]?.tabId
+    if (!tabId) return false
+    const parent = await browser.walk(tabId, 'parent')
+    const child = await browser.walk(tabId, 'child')
+    console.log(`[smoke]      walked ${parent?.selector} -> ${child?.selector}`)
+    return parent?.tag !== 'button' && child?.classes.includes('cta') === true
   },
+  // Before 'asking about an element': sending the question clears the selection this reads.
   'agents can drive the browser through MCP tools': async (_win, page) => {
     const handle = editorMcp()
     if (!handle) return false
@@ -343,6 +353,90 @@ const workspaceChecks: Record<string, Check> = {
     } finally {
       await client.close()
     }
+  },
+  'asking about an element sends it to the agent': async (win, page) => {
+    await page(`document.querySelector('[data-testid="ask-element"]').focus()`)
+    win.webContents.insertText('why is this blue')
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' })
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' })
+    return page(`__lg.waitFor(() => [...document.querySelectorAll('[data-testid="agent-message"]')]
+      .some((m) => m.textContent.includes('why is this blue') && m.textContent.includes('[data-testid')), 10000)`)
+  },
+  'the language server reports type errors to agents and the editor': async (_win, page) => {
+    const text = await mcpToolText('get_diagnostics', { path: 'src/types.ts' })
+    console.log(`[smoke]      ${text.split('\n')[0]}`)
+    if (!/src\/types\.ts:1:14 error \(typescript 2322\)/.test(text)) return false
+    // Files open in the editor are kept in the server and their problems pushed to the renderer.
+    await mcpToolText('open_file', { path: 'src/types.ts' })
+    return page(`__lg.waitFor(async () => {
+      const { diagnostics } = await window.lookingglass.diagnostics.all()
+      return diagnostics['src/types.ts']?.length === 1
+        && document.querySelector('[data-testid="editor-tab"][data-path="src/types.ts"]')
+    }, 15000)`)
+  },
+  'Cmd+K runs an inline edit through the agent': async (win, page) => {
+    await mcpToolText('open_file', { path: 'src/types.ts', line: 1 })
+    await page(
+      `__lg.waitFor(() => document.querySelector('[data-testid="code-editor"][data-path="src/types.ts"]'))`,
+    )
+    await new Promise((r) => setTimeout(r, 300))
+    send(win.webContents, 'menu:command', 'inline-edit')
+    if (!(await page(`__lg.waitFor(() => document.activeElement?.dataset.testid === 'inline-edit-input')`)))
+      return false
+    win.webContents.insertText('count is a number')
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' })
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' })
+    return page(`(async () => {
+      const ok = await __lg.waitFor(async () =>
+        (await window.lookingglass.fs.readFile('src/types.ts')).contents.startsWith('// count is a number')
+        && [...document.querySelectorAll('[data-testid="agent-message"]')].some((m) => m.textContent.includes('Edited src/types.ts')), 15000)
+      return ok
+    })()`)
+  },
+  'earlier sessions can be resumed from history': `(async () => {
+    for (const button of document.querySelectorAll('[aria-label="Close chat"]')) button.click()
+    await __lg.waitFor(() => !document.querySelector('[data-testid="chat"]'))
+    __lg.click('[data-testid="history"]')
+    const session = await __lg.waitFor(() =>
+      document.querySelector('[data-testid="history-agent"][data-agent-id="fake"] [data-testid="history-session"][title="hello there"]'), 10000)
+    if (!session) return false
+    session.click()
+    return __lg.waitFor(() => {
+      const chat = document.querySelector('[data-testid="chat"][data-state="ready"]')
+      return chat && [...chat.querySelectorAll('[data-testid="agent-message"]')].some((m) => m.textContent.includes('hello there'))
+        && chat.textContent.includes('Resumed an earlier session')
+    }, 10000)
+  })()`,
+  'settings change the theme, shortcuts and agents': async (win, page) => {
+    send(win.webContents, 'menu:command', 'open-settings')
+    if (!(await page(`__lg.waitFor(() => document.querySelector('[data-testid="settings"]'))`))) return false
+    const light = await page(`(async () => {
+      __lg.click('[data-testid="theme-option"][data-value="light"]')
+      return __lg.waitFor(() => matchMedia('(prefers-color-scheme: light)').matches)
+    })()`)
+    await page(`__lg.click('[data-testid="theme-option"][data-value="dark"]')`)
+
+    await page(`window.lookingglass.settings.set({ keybindings: { 'inline-edit': 'CmdOrCtrl+Shift+J' } })`)
+    const agentMenu = Menu.getApplicationMenu()?.items.find((i) => i.label === 'Agent')
+    const rebound = agentMenu?.submenu?.items[0]?.accelerator === 'CmdOrCtrl+Shift+J'
+    await page(`window.lookingglass.settings.set({ keybindings: {} })`)
+
+    await page(`__lg.click('[data-testid="add-agent"]')`)
+    for (const [field, value] of [
+      ['agent-id', 'echo-agent'],
+      ['agent-label', 'Echo agent'],
+      ['agent-command', '/bin/echo'],
+    ]) {
+      await page(
+        `[...document.querySelectorAll('[data-testid="custom-agent"]')].at(-1).querySelector('[data-testid="${field}"]').focus()`,
+      )
+      win.webContents.insertText(value!)
+    }
+    await page(`__lg.click('[data-testid="save-agents"]')`)
+    const added = await page(`__lg.waitFor(async () =>
+      (await window.lookingglass.agent.list()).some((a) => a.id === 'echo-agent' && a.label === 'Echo agent'))`)
+    console.log(`[smoke]      light=${light} rebound=${rebound} added=${added}`)
+    return light && rebound && added
   },
   'path traversal is refused': `window.lookingglass.fs.readFile('../outside.txt').then(() => false, () => true)`,
   'search finds matches': `window.lookingglass.search.run({ pattern: 'greeting' })
@@ -430,12 +524,48 @@ const claudeChecks: Record<string, Check> = {
   },
 }
 
+/** One check may not hold up the rest: it fails after this long. */
+const CHECK_TIMEOUT_MS = 30_000
+/** The whole run gives up after this long (scripts/smoke.mjs kills the app a minute later). */
+const RUN_TIMEOUT_MS = 480_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${ms / 1000}s`)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
+/** Call one of the built-in MCP server's tools and return its text output. */
+async function mcpToolText(name: string, args: Record<string, unknown> = {}): Promise<string> {
+  const handle = editorMcp()
+  if (!handle) throw new Error('The editor MCP server is not running')
+  const client = new Client({ name: 'smoke', version: '1.0.0' })
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(handle.url), {
+      requestInit: { headers: Object.fromEntries(handle.headers.map((h) => [h.name, h.value])) },
+    }),
+  )
+  try {
+    const result = (await client.callTool({ name, arguments: args })) as {
+      content: Array<{ type: string; text?: string }>
+    }
+    return result.content
+      .filter((c) => c.type === 'text')
+      .map((c) => c.text)
+      .join('\n')
+  } finally {
+    await client.close()
+  }
+}
+
 export function runSmokeTest(win: BrowserWindow): void {
   const fail = (message: string): void => {
     console.error(`[smoke] FAIL ${message}`)
     app.exit(1)
   }
-  const timeout = setTimeout(() => fail('timed out after 240s'), 240_000)
+  const timeout = setTimeout(() => fail(`timed out after ${RUN_TIMEOUT_MS / 1000}s`), RUN_TIMEOUT_MS)
   win.webContents.on('console-message', (event) => console.log(`[page] ${event.message}`))
   const checks = {
     ...baseChecks,
@@ -452,7 +582,10 @@ export function runSmokeTest(win: BrowserWindow): void {
     for (const [name, check] of Object.entries(checks)) {
       let ok: unknown
       try {
-        ok = typeof check === 'string' ? await page(check) : await check(win, page)
+        ok = await withTimeout(
+          typeof check === 'string' ? page(check) : Promise.resolve(check(win, page)),
+          CHECK_TIMEOUT_MS,
+        )
       } catch (error) {
         ok = false
         console.error(`[smoke]      ${String(error)}`)

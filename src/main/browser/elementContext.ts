@@ -250,7 +250,8 @@ async function sourceHints(
     component?: string,
   ) => {
     if (!raw) return
-    const path = (await deps.toWorkspacePath(raw)) ?? (via === 'data-lg-source' ? await deps.findFile(raw) : null)
+    const path =
+      (await deps.toWorkspacePath(raw)) ?? (via === 'data-lg-source' ? await deps.findFile(raw) : null)
     if (path && !hints.some((h) => h.path === path)) {
       hints.push({ path, ...(line ? { line } : {}), via, ...(component ? { component } : {}) })
     }

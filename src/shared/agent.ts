@@ -34,6 +34,23 @@ export interface NewSessionResult {
   modes?: SessionModeState | null
   /** What the agent accepts in prompts beyond text (images, embedded file contents). */
   promptCapabilities: PromptCapabilities
+  /** The agent supports `session/load`, so this session can be resumed later. */
+  canResume: boolean
+}
+
+/** A past session the agent reports through `session/list`. */
+export interface SessionSummary {
+  sessionId: string
+  agentId: string
+  title: string | null
+  /** ISO 8601, when the agent reports it. */
+  updatedAt: string | null
+}
+
+export interface SessionHistory {
+  /** False when the agent can't list or load sessions. */
+  supported: boolean
+  sessions: SessionSummary[]
 }
 
 /** Returned instead of a session when the agent wants the user to log in first. */

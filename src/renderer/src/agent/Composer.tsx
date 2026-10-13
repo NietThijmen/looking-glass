@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { basename } from '../lib/paths'
-import { useAgents, type Attachment, type Chat } from '../store/agents'
+import { useAgents, type Attachment, type AttachmentPart, type Chat } from '../store/agents'
 import { useEditor } from '../store/editor'
-import { AtSign, Icon, Image, Paperclip, X, iconSize, mentionOptionIcon } from '../ui/icon'
+import {
+  AtSign,
+  Chevron,
+  Crosshair,
+  Icon,
+  Image,
+  Paperclip,
+  X,
+  iconSize,
+  mentionOptionIcon,
+} from '../ui/icon'
 import { imageAttachment, mentionOptions, optionLabel, resolveMention, type MentionOption } from './mentions'
 
 /** `@query` right before the caret, if the user is typing a mention. */
@@ -11,11 +21,69 @@ function mentionQuery(text: string, caret: number): { start: number; query: stri
   return match ? { start: caret - match[2]!.length - 1, query: match[2]! } : null
 }
 
+const PREVIEW_CHARS = 600
+
+/** What a part would send, shortened for the preview. */
+function PartPreview({ part }: { part: AttachmentPart }) {
+  const block = part.blocks[0]
+  if (block?.type === 'image')
+    return (
+      <img
+        src={`data:${block.mimeType};base64,${block.data}`}
+        alt=""
+        className="max-h-24 max-w-full rounded border border-border object-contain"
+      />
+    )
+  const text = part.blocks
+    .map((b) => (b.type === 'text' ? b.text : b.type === 'resource_link' ? b.uri : ''))
+    .join('\n')
+  if (!text) return null
+  return (
+    <pre className="max-h-24 overflow-auto rounded bg-bg px-1.5 py-1 font-mono text-[10px] whitespace-pre-wrap text-muted select-text">
+      {text.length > PREVIEW_CHARS ? `${text.slice(0, PREVIEW_CHARS)}…` : text}
+    </pre>
+  )
+}
+
+/** The parts of an attachment, each with a tick box and a preview of what it sends. */
+function PartsPanel({ attachment, onToggle }: { attachment: Attachment; onToggle(index: number): void }) {
+  return (
+    <div
+      data-testid="attachment-parts"
+      className="mb-1.5 rounded border border-border bg-panel p-1.5 text-[11px]"
+    >
+      {attachment.parts?.map((part, i) => (
+        <div key={i} className="mb-1 last:mb-0">
+          <label className={`flex items-center gap-1.5 ${part.locked ? 'text-muted' : 'cursor-pointer'}`}>
+            <input
+              type="checkbox"
+              data-testid="attachment-part"
+              data-label={part.label}
+              checked={part.on || !!part.locked}
+              disabled={part.locked}
+              onChange={() => onToggle(i)}
+            />
+            {part.label}
+            {part.locked && <span className="text-muted">(always sent)</span>}
+          </label>
+          {(part.on || part.locked) && (
+            <div className="mt-0.5 ml-5">
+              <PartPreview part={part} />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function Composer({ chat }: { chat: Chat }) {
   const [text, setText] = useState('')
   const [caret, setCaret] = useState(0)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [attachActive, setAttachActive] = useState(true)
+  /** The attachment whose parts are shown for ticking. */
+  const [expanded, setExpanded] = useState<number | null>(null)
   const [files, setFiles] = useState<string[] | null>(null)
   const [highlight, setHighlight] = useState(0)
   const [dismissedAt, setDismissedAt] = useState<number | null>(null)
@@ -93,6 +161,7 @@ export function Composer({ chat }: { chat: Chat }) {
     void send(chat.key, text, all)
     setText('')
     setAttachments([])
+    setExpanded(null)
     setError(null)
   }
 
@@ -112,7 +181,7 @@ export function Composer({ chat }: { chat: Chat }) {
                 e.preventDefault()
                 void pick(option)
               }}
-              className={`flex w-full items-center gap-2 px-2 py-1 text-left ${i === highlight ? 'bg-accent/20' : 'hover:bg-white/5'}`}
+              className={`flex w-full items-center gap-2 px-2 py-1 text-left ${i === highlight ? 'bg-accent/20' : 'hover:bg-fg/5'}`}
             >
               <Icon icon={mentionOptionIcon[option.kind]} className={`${iconSize.sm} text-muted`} />
               <span className="truncate font-mono text-[12px]">{optionLabel(option)}</span>
@@ -134,27 +203,64 @@ export function Composer({ chat }: { chat: Chat }) {
             {basename(activeFile)}
           </button>
         )}
-        {attachments.map((a, i) => (
-          <span
-            key={i}
-            data-testid="attachment"
-            className="flex items-center gap-1 rounded border border-accent/50 px-1.5 py-0.5 text-[11px]"
-          >
-            {a.blocks[0]?.type === 'image' ? (
-              <Icon icon={Image} className={iconSize.xs} />
-            ) : (
-              <Icon icon={AtSign} className={iconSize.xs} />
-            )}
-            {a.label}
-            <button
-              aria-label="Remove"
-              onClick={() => setAttachments((list) => list.filter((_, j) => j !== i))}
+        {attachments.map((a, i) => {
+          const sent = a.parts?.filter((p) => p.on || p.locked).length
+          return (
+            <span
+              key={i}
+              data-testid="attachment"
+              className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] ${
+                expanded === i ? 'border-accent bg-accent/10' : 'border-accent/50'
+              }`}
             >
-              <Icon icon={X} className={iconSize.sm} />
-            </button>
-          </span>
-        ))}
+              <Icon
+                icon={a.parts ? Crosshair : a.blocks[0]?.type === 'image' ? Image : AtSign}
+                className={iconSize.xs}
+              />
+              {a.parts ? (
+                <button
+                  data-testid="attachment-expand"
+                  title="Choose what to send"
+                  aria-expanded={expanded === i}
+                  className="inline-flex items-center gap-1"
+                  onClick={() => setExpanded((e) => (e === i ? null : i))}
+                >
+                  {a.label}
+                  <span className="text-muted">
+                    {sent}/{a.parts.length}
+                  </span>
+                  <Chevron open={expanded === i} />
+                </button>
+              ) : (
+                a.label
+              )}
+              <button
+                aria-label="Remove"
+                onClick={() => {
+                  setAttachments((list) => list.filter((_, j) => j !== i))
+                  setExpanded((e) => (e === null || e < i ? e : e === i ? null : e - 1))
+                }}
+              >
+                <Icon icon={X} className={iconSize.sm} />
+              </button>
+            </span>
+          )
+        })}
       </div>
+      {expanded !== null && attachments[expanded]?.parts && (
+        <PartsPanel
+          attachment={attachments[expanded]}
+          onToggle={(index) =>
+            setAttachments((list) =>
+              list.map((a, j) =>
+                j === expanded && a.parts
+                  ? { ...a, parts: a.parts.map((p, k) => (k === index ? { ...p, on: !p.on } : p)) }
+                  : a,
+              ),
+            )
+          }
+        />
+      )}
 
       <textarea
         ref={ref}
@@ -228,7 +334,7 @@ export function Composer({ chat }: { chat: Chat }) {
           <button
             data-testid="stop"
             onClick={() => void cancel(chat.key)}
-            className="rounded border border-border px-3 py-0.5 hover:bg-white/5"
+            className="rounded border border-border px-3 py-0.5 hover:bg-fg/5"
           >
             Stop
           </button>
