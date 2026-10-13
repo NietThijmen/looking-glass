@@ -45,7 +45,7 @@ function ColumnGrip({
         if (from && from !== column) onReorder(from, column)
       }}
       className={`no-drag flex w-5 shrink-0 cursor-grab items-center justify-center border-r border-border active:cursor-grabbing ${
-        over ? 'bg-accent/20' : 'text-muted hover:bg-white/5 hover:text-fg'
+        over ? 'bg-accent/20' : 'text-muted hover:bg-fg/5 hover:text-fg'
       }`}
     >
       <Icon icon={GripVertical} className={iconSize.sm} />
@@ -99,7 +99,7 @@ export function Workbench() {
   const renderColumn = (column: WorkbenchColumn): ReactNode => {
     switch (column) {
       case 'editor':
-        return <EditorArea kinds={['file', 'diff', 'review']} />
+        return <EditorArea kinds={['file', 'diff', 'review', 'settings']} />
       case 'agent':
         return <AgentPanel />
       case 'browser':

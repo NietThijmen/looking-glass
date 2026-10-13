@@ -24,6 +24,15 @@ const git = (...args) => execFileSync('git', args, { cwd: workspace, stdio: 'ign
 
 write('README.md', '# Smoke fixture\n')
 write('src/app.ts', 'export const greeting = "hello"\n')
+// A type error for the language server, which uses the workspace's own TypeScript.
+write('src/types.ts', 'export const count: number = "three"\n')
+write('.gitignore', 'node_modules/\n')
+fs.mkdirSync(path.join(workspace, 'node_modules'))
+fs.symlinkSync(
+  path.join(repoRoot, 'node_modules', 'typescript'),
+  path.join(workspace, 'node_modules', 'typescript'),
+  'dir',
+)
 write(
   'site/index.html',
   `<!doctype html><html><head><title>Smoke site</title><link rel="stylesheet" href="/site/styles.css"></head>
@@ -77,6 +86,13 @@ const inherited = Object.fromEntries(
   ),
 )
 
+if (!process.argv[2] && !fs.existsSync(path.join(repoRoot, 'out-smoke', 'renderer', 'index.html'))) {
+  console.error('[smoke] FAIL out-smoke/renderer/index.html is missing: build with `pnpm smoke`')
+  server.close()
+  fs.rmSync(tmp, { recursive: true, force: true })
+  process.exit(1)
+}
+
 const child = spawn(binary, args, {
   stdio: 'inherit',
   env: {
@@ -84,13 +100,22 @@ const child = spawn(binary, args, {
     LOOKINGGLASS_SMOKE: '1',
     LOOKINGGLASS_WORKSPACE: workspace,
     LOOKINGGLASS_SMOKE_SITE: siteUrl,
+    LOOKINGGLASS_SMOKE_USER_DATA: path.join(tmp, 'user-data'),
+    LOOKINGGLASS_HOME: path.join(tmp, 'lookingglass-home'),
     ...(process.env.SCREENSHOT
       ? { LOOKINGGLASS_SMOKE_SCREENSHOT: path.resolve(process.env.SCREENSHOT) }
       : {}),
   },
 })
 
+// The app gives up after 480s on its own; this catches an app that never gets that far.
+const killTimer = setTimeout(() => {
+  console.error('[smoke] FAIL app did not exit within 540s, killing it')
+  child.kill('SIGKILL')
+}, 540_000)
+
 child.on('exit', (code) => {
+  clearTimeout(killTimer)
   server.close()
   fs.rmSync(tmp, { recursive: true, force: true })
   process.exit(code ?? 1)

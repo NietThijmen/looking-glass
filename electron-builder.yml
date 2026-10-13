@@ -16,10 +16,24 @@ asarUnpack:
   # The Claude CLI binary that the Claude Code ACP adapter launches.
   - '**/node_modules/@anthropic-ai/claude-agent-sdk-*/**'
 mac:
+  # zip is what electron-updater downloads on macOS; dmg is for first installs.
   target: [dmg, zip]
   category: public.app-category.developer-tools
-  # Signing and notarization land in Phase 6. Unsigned local builds for now.
-  identity: null
+  # Signed with a "Developer ID Application" certificate from the keychain (or CSC_LINK /
+  # CSC_KEY_PASSWORD). Without one, the build is unsigned; CSC_IDENTITY_AUTO_DISCOVERY=false
+  # forces that. Notarization runs when APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID
+  # (or APPLE_API_KEY, APPLE_API_KEY_ID, APPLE_API_ISSUER) are set, and is skipped otherwise.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+# Windows builds are signed when WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD (or CSC_LINK) are set.
+# Don't turn off the RunAsNode fuse: agents and the language server run with ELECTRON_RUN_AS_NODE.
+publish:
+  # `pnpm release` uploads installers and the latest*.yml files electron-updater reads.
+  provider: github
+  owner: NietThijmen
+  repo: looking-glass
+  releaseType: draft
 win:
   target: [nsis]
 linux:

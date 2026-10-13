@@ -10,8 +10,13 @@
  *   "touch <path> <text>" → write <path> directly with Node, like an agent using its own tools
  *   "run <command>" → terminal/create, wait for exit, report the output
  *   "slow"         → stream for a few seconds; honours session/cancel
+ *   "mcp"          → list the MCP servers the session was given
+ *   "Edit <path> lines A-B as follows: <text>" (a Cmd+K prompt) → replace those lines with `// <text>`
  *   "auth"         → fail session/new with auth_required until `authenticate` was called
  *   anything else  → thought, plan, a tool call, then echo the prompt as markdown
+ *
+ * Sessions are kept in memory, so `session/list` and `session/load` work for the
+ * life of the process.
  */
 import {
   agent,
@@ -33,6 +38,11 @@ import { Readable, Writable } from 'node:stream'
 interface Session {
   cwd: string
   abort: AbortController | null
+  /** Everything sent in this session, user messages included, for `session/load`. */
+  history: SessionUpdate[]
+  mcpServers: string[]
+  title: string | null
+  updatedAt: string
 }
 
 const sessions = new Map<string, Session>()
@@ -71,7 +81,10 @@ async function turn(
   text: string,
   signal: AbortSignal,
 ) {
-  const send = (update: SessionUpdate) => cx.notify(methods.client.session.update, { sessionId, update })
+  const send = (update: SessionUpdate) => {
+    session.history.push(update)
+    return cx.notify(methods.client.session.update, { sessionId, update })
+  }
   const say = (t: string) =>
     send({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: t } })
 
@@ -149,6 +162,19 @@ async function turn(
     return
   }
 
+  const inline = /^Edit (\S+) lines? (\d+)(?:-(\d+))? as follows: (.+)$/m.exec(text)
+  if (inline) {
+    const [, rel, from, to, instruction] = inline
+    const target = path.resolve(session.cwd, rel!)
+    const { content } = await cx.request(methods.client.fs.readTextFile, { sessionId, path: target })
+    const lines = content.split('\n')
+    const start = Number(from) - 1
+    lines.splice(start, Number(to ?? from) - start, `// ${instruction}`)
+    await cx.request(methods.client.fs.writeTextFile, { sessionId, path: target, content: lines.join('\n') })
+    await say(`Edited ${rel}`)
+    return
+  }
+
   if (/^edit\b/i.test(text)) {
     const toolCall: ToolCallUpdate = { toolCallId: 'edit-1', title: 'Edit src/app.ts', kind: 'edit' }
     const options: PermissionOption[] = [
@@ -174,6 +200,11 @@ async function turn(
       status: choice === 'allow' ? 'completed' : 'failed',
     })
     await say(`Permission outcome: ${choice}`)
+    return
+  }
+
+  if (/^mcp\b/i.test(text)) {
+    await say(`MCP servers: ${session.mcpServers.join(', ') || '(none)'}`)
     return
   }
 
@@ -218,7 +249,11 @@ async function turn(
 const app = agent({ name: 'fake-agent' })
   .onRequest(methods.agent.initialize, () => ({
     protocolVersion: PROTOCOL_VERSION,
-    agentCapabilities: { loadSession: false, promptCapabilities: { embeddedContext: true } },
+    agentCapabilities: {
+      loadSession: true,
+      sessionCapabilities: { list: {} },
+      promptCapabilities: { embeddedContext: true },
+    },
     agentInfo: { name: 'fake-agent', title: 'Fake agent', version: '1.0.0' },
     authMethods: [{ id: 'fake-login', name: 'Fake login', description: 'Always succeeds' }],
   }))
@@ -229,8 +264,28 @@ const app = agent({ name: 'fake-agent' })
   .onRequest(methods.agent.session.new, (ctx) => {
     if (!authenticated) throw RequestError.authRequired(undefined, 'Log in to the fake agent first')
     const sessionId = randomUUID()
-    sessions.set(sessionId, { cwd: ctx.params.cwd, abort: null })
+    sessions.set(sessionId, {
+      cwd: ctx.params.cwd,
+      abort: null,
+      history: [],
+      mcpServers: ctx.params.mcpServers.map((s) => s.name),
+      title: null,
+      updatedAt: new Date().toISOString(),
+    })
     return { sessionId }
+  })
+  .onRequest(methods.agent.session.list, (ctx) => ({
+    sessions: [...sessions]
+      .filter(([, s]) => !ctx.params.cwd || s.cwd === ctx.params.cwd)
+      .map(([sessionId, s]) => ({ sessionId, cwd: s.cwd, title: s.title, updatedAt: s.updatedAt })),
+  }))
+  .onRequest(methods.agent.session.load, async (ctx) => {
+    if (!authenticated) throw RequestError.authRequired(undefined, 'Log in to the fake agent first')
+    const session = sessions.get(ctx.params.sessionId)
+    if (!session) throw RequestError.resourceNotFound(ctx.params.sessionId)
+    for (const update of session.history)
+      await ctx.client.notify(methods.client.session.update, { sessionId: ctx.params.sessionId, update })
+    return {}
   })
   .onNotification(methods.agent.session.cancel, (ctx) => {
     sessions.get(ctx.params.sessionId)?.abort?.abort()
@@ -241,8 +296,12 @@ const app = agent({ name: 'fake-agent' })
     session.abort?.abort()
     const abort = new AbortController()
     session.abort = abort
+    const text = promptText(ctx.params.prompt)
+    session.title ??= text.slice(0, 60) || null
+    session.updatedAt = new Date().toISOString()
+    session.history.push({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text } })
     try {
-      await turn(ctx.client, ctx.params.sessionId, session, promptText(ctx.params.prompt), abort.signal)
+      await turn(ctx.client, ctx.params.sessionId, session, text, abort.signal)
       return { stopReason: 'end_turn' as const }
     } catch (error) {
       if (abort.signal.aborted) return { stopReason: 'cancelled' as const }

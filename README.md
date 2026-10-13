@@ -2,7 +2,7 @@
 
 > An AI-first code editor in the spirit of Cursor, built on Electron. The difference: **it ships no agent of its own.** It speaks the [Agent Client Protocol (ACP)](https://agentclientprotocol.com), so you can use the agent you already pay for (Claude Code, Codex, or anything else that speaks ACP) inside a full editor.
 
-**Status:** Phases 0–3 (skeleton, editor shell, ACP chat, Cursor-style editing) are done. Phase 4 (browser and element picker) is mostly done; a few UX gaps remain. See the [Roadmap](#roadmap).
+**Status:** Phases 0–6 are done: skeleton, editor shell, ACP chat, Cursor-style editing, browser and element picker, multi-agent, and polish. Only the "later / maybe" items are open. See the [Roadmap](#roadmap).
 
 ---
 
@@ -14,14 +14,13 @@ Meanwhile the best coding agents are CLIs (Claude Code, Codex) whose subscriptio
 
 Lookingglass is the client: the editor shell and UX, with the agent swappable per session.
 
-|                                   | Cursor             | Lookingglass                                                                    |
-| --------------------------------- | ------------------ | ------------------------------------------------------------------------------- |
-| Editor                            | VS Code fork       | Electron + `@pierre/diffs`                                                      |
-| Agent                             | Cursor's built-in  | Any ACP agent (Claude Code, Codex, Gemini CLI, custom)                          |
-| Auth / billing                    | Cursor account     | Each agent's own login and subscription                                         |
-| Model choice                      | Cursor's menu      | Whatever the agent supports                                                     |
-| Built-in browser + element picker | Yes                | Yes. Any agent can use it, via MCP (see [Browser](#browser-and-element-picker)) |
-| Tab autocomplete                  | Yes (custom model) | Out of scope for v1 (see [Non-goals](#non-goals-for-v1))                        |
+|                                   | Cursor            | Lookingglass                                                                    |
+| --------------------------------- | ----------------- | ------------------------------------------------------------------------------- |
+| Editor                            | VS Code fork      | Electron + `@pierre/diffs`                                                      |
+| Agent                             | Cursor's built-in | Any ACP agent (Claude Code, Codex, Gemini CLI, custom)                          |
+| Auth / billing                    | Cursor account    | Each agent's own login and subscription                                         |
+| Model choice                      | Cursor's menu     | Whatever the agent supports                                                     |
+| Built-in browser + element picker | Yes               | Yes. Any agent can use it, via MCP (see [Browser](#browser-and-element-picker)) |
 
 ---
 
@@ -35,7 +34,6 @@ Lookingglass is the client: the editor shell and UX, with the agent swappable pe
 
 ## Non-goals for v1
 
-- **Tab autocomplete / ghost text.** ACP is a conversational, turn-based protocol and isn't built for sub-100ms completions. The editor (`@pierre/diffs`) already has an edit-prediction provider hook, so this could be added later with a separate completion model, unrelated to ACP.
 - **VS Code extension compatibility.** We use `@pierre/diffs`, not a VS Code fork.
 - **Hosting models or proxying API keys.** Agents bring their own auth.
 - **Multi-root workspaces, remote/SSH workspaces, collaboration.** Maybe later.
@@ -75,17 +73,12 @@ The `fs/*` and `terminal/*` methods are what make a Cursor-like UX possible. The
 
 ## Supported agents
 
-| Agent                              | How it connects                                                                              | Notes                                                                                               |
-| ---------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Claude Code**                    | `@agentclientprotocol/claude-agent-acp` (wraps the Claude Agent SDK), bundled with the app   | Uses the user's existing `claude` login or `ANTHROPIC_API_KEY`                                      |
-| **Codex**                          | `@agentclientprotocol/codex-acp` adapter                                                     | Uses the user's `codex` login / OpenAI key                                                          |
-| **Gemini CLI**                     | Native ACP mode (`gemini --experimental-acp`)                                                | Free extra, since it's just another ACP agent                                                       |
-| **Cursor SDK** _(optional, later)_ | **Our own adapter**: a small Node process that wraps the Cursor SDK and exposes ACP on stdio | No off-the-shelf adapter exists, so we'd build and maintain it. Only worth doing if there's demand. |
-| **Custom**                         | Any command that speaks ACP                                                                  | Configured by the user in settings                                                                  |
+| Agent                                                 | How it connects                                                                            | Notes                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| **Claude Code**                                       | `@agentclientprotocol/claude-agent-acp` (wraps the Claude Agent SDK), bundled with the app | Uses the user's existing `claude` login or `ANTHROPIC_API_KEY` |
+| **Any other ACP agent** (Codex, Gemini CLI, your own) | The user installs the agent or its ACP adapter and adds the command to `agents.json`       | Uses that agent's own login                                    |
 
-Package names and flags for these adapters change often. Pin versions and re-check before implementing.
-
-Claude Code is built in: the adapter (and the Claude CLI binary it ships) is a pinned dependency, run with Electron's own Node, so users don't need Node installed. Other agents are added in `~/.lookingglass/agents.json` (a built-in id can't be overridden):
+Claude Code is built in: the adapter (and the Claude CLI binary it ships) is a pinned dependency, run with Electron's own Node, so users don't need Node installed. Lookingglass doesn't bundle, download or special-case any other agent. Install the agent or its ACP adapter yourself (for example `codex-acp` for Codex, or Gemini CLI's ACP mode), then add it to `~/.lookingglass/agents.json` (a built-in id can't be overridden). Check the agent's own docs for the current command and flags:
 
 ```jsonc
 // ~/.lookingglass/agents.json
@@ -137,8 +130,8 @@ Claude Code is built in: the adapter (and the Claude CLI binary it ships) is a p
 └────────────┼──────────────────────────────────────────────────────┘
              ▼
    ┌──────────────────┐  ┌──────────────┐  ┌──────────────┐
-   │ claude-code ACP  │  │  codex-acp   │  │ cursor-acp   │  ...
-   │   adapter        │  │              │  │ (ours, opt.) │
+   │ claude-code ACP  │  │  codex-acp   │  │  gemini CLI  │  ...
+   │   adapter        │  │              │  │ (native ACP) │
    └──────────────────┘  └──────────────┘  └──────────────┘
 ```
 
@@ -174,10 +167,9 @@ The editor and all diff views use [`@pierre/diffs`](https://diffs.com), a Shiki-
 | Diagnostics squiggles                                   | Editor `Marker`s with severities                                                                                                                       |
 | Inline comments, "Ask about this", agent notes on lines | The line-annotation framework                                                                                                                          |
 | Cmd+K inline edit trigger                               | The selection-action popover (`enabledSelectionAction`)                                                                                                |
-| Tab autocomplete (later)                                | The `editPrediction.provider` hook                                                                                                                     |
 | Smooth highlighting on big files                        | The worker pool (`WorkerPoolContextProvider`). Our CSP already allows `worker-src 'self' blob:`.                                                       |
 
-**Trade-off vs. Monaco:** no built-in IntelliSense. Completions, hover and go-to-definition need the LSP bridge (Phase 6). For an agent-first editor that's acceptable, but it's the main thing we give up. See open question 5.
+**Trade-off vs. Monaco:** no built-in IntelliSense. The LSP bridge (Phase 6) adds diagnostics only; hover, go-to-definition and completions are out of scope for v1. For an agent-first editor that's acceptable, but it's the main thing we give up. See open question 5.
 
 ## Edit review (the core UX)
 
@@ -213,9 +205,9 @@ Prompts sent with `session/prompt` are built from ACP content blocks:
 
 ### Inline edit (Cmd+K)
 
-1. The user selects code and presses Cmd+K, then types an instruction.
-2. We open (or reuse) a short-lived session on the user's default agent and send a prompt: the instruction, the selection as a resource, and a system-style preface asking it to edit only that range.
-3. The resulting `fs/write_text_file` becomes a pending edit, shown inline as a diff at the selection.
+1. The user selects code (or leaves the caret on a line) and presses Cmd+K, then types an instruction in the box over the editor.
+2. The file is saved, and a new chat on the default agent gets the instruction, the code as a resource, and a preface asking it to change only those lines. The chat is visible, so the edit can be watched or stopped like any other turn.
+3. The agent's write lands in review like any agent edit, and the file's review tab opens when the turn ends.
 
 This is slower than Cursor's purpose-built inline model because it goes through a full agent turn. That's acceptable for v1, and fast-model agent settings can help.
 
@@ -223,13 +215,25 @@ This is slower than Cursor's purpose-built inline model because it goes through 
 
 `session/new` accepts a list of MCP servers. Lookingglass runs a small **built-in MCP server** and passes it to every session, so any agent gets editor-aware tools without per-agent work:
 
-- `get_diagnostics`: errors and warnings from the editor's markers (fed by language servers once the LSP bridge exists)
+- `get_diagnostics`: errors and warnings from the language server, for one file (opened on demand) or the files open in the editor
 - `get_open_editors`: open tabs and the active selection
 - `open_file`: reveal a file or line in the editor
 - `get_git_status`
 - `browser_*`: see [Agent-controlled browser](#agent-controlled-browser-mcp-tools)
 
-Users can add their own MCP servers per workspace, and those are forwarded too.
+Projects can add their own MCP servers in `.lookingglass/settings.json`, in the shape most agents use. They're passed to every new or resumed session alongside the built-in one (HTTP/SSE servers only to agents that support them):
+
+```jsonc
+// <workspace>/.lookingglass/settings.json
+{
+  "mcpServers": {
+    "db": { "command": "npx", "args": ["my-db-mcp"], "env": { "DB_URL": "postgres://…" } },
+    "docs": { "type": "http", "url": "https://example.com/mcp", "headers": { "Authorization": "Bearer …" } },
+  },
+}
+```
+
+Because agents start these servers themselves, the first session in a folder asks whether to allow the listed servers. The answer is remembered for that exact list; changing the list asks again.
 
 ---
 
@@ -303,11 +307,11 @@ We only send block types the agent's `promptCapabilities` allows. If images aren
 This is what makes the picker feel magic: "this button" turns into `src/components/Hero.tsx:42`. We try these in order and show the result in the chip, where you can click it to open the file:
 
 1. **Framework dev metadata**, read in the page's isolated world:
-   - **React**: the owner component name, and its source location when the build includes it. Older dev builds expose `_debugSource` on the fiber. Newer React versions removed it, so for those we rely on option 2.
+   - **React**: the owner component name, and its source location when the build includes it. Older dev builds expose `_debugSource` on the fiber. Newer React versions removed it, so for those we fall back to the options below.
    - **Vue**: `__vueParentComponent.type.__file`
    - **Svelte**: `__svelte_meta.loc`
    - **Angular**: `ng.getComponent()` for the component name
-2. **Optional dev plugin**: a tiny Vite / Babel / SWC plugin (`@lookingglass/source-attrs`) that adds `data-lg-source="src/Hero.tsx:42:7"` to JSX/template elements in dev builds only. It's the most reliable option across frameworks. We'll suggest installing it the first time resolution fails.
+2. **`data-lg-source` attributes**: if a project's own build tooling adds `data-lg-source="src/Hero.tsx:42:7"` to elements, we read it as an exact location.
 3. **Stylesheet source maps**: the matched CSS rules from CDP come with stylesheet URLs and lines, which we map through source maps to `.css`/`.scss`/`.module.css` files in the workspace. This tells the agent where the styles live, even when the markup source is unknown.
 4. **Search heuristic**: ripgrep the workspace for distinctive class names, `id`s, `data-testid`s or text content, and attach the best few matches marked as _guesses_.
 
@@ -440,9 +444,7 @@ lookingglass/
 │   └── shared/
 │       └── ipc-types.ts             # IPC contract shared by main, preload and renderer
 ├── packages/
-│   ├── fake-agent/                  # scriptable ACP agent for tests
-│   ├── source-attrs/                # optional Vite/Babel/SWC plugin adding data-lg-source
-│   └── cursor-acp/                  # (optional, later) Cursor SDK → ACP adapter
+│   └── fake-agent/                  # scriptable ACP agent for tests
 └── e2e/
 ```
 
@@ -455,6 +457,7 @@ lookingglass/
 - Writes go through pending edits by default. Commands go through `terminal/*` and need permission according to policy.
 - The renderer is sandboxed. The preload exposes a narrow, typed API, with no generic `invoke(channel, ...)` passthrough.
 - No secrets are stored by Lookingglass. Agent auth stays in each agent's own config (`~/.claude`, `~/.codex`, and so on).
+- A workspace's own MCP servers (`.lookingglass/settings.json`) are only passed to agents after the user allows that exact list for that folder, so opening a cloned repo can't make an agent start its commands.
 - Browser tabs are isolated from the app and from agents except through the permissioned `browser_*` tools. See [Browser security](#browser-security).
 - **Caveat:** an agent that executes commands with its _own_ tools (not `terminal/*`) runs with the user's privileges, the same as running the CLI directly. The UI should make it clear when an agent is in a "bypass permissions" style mode.
 
@@ -492,42 +495,38 @@ lookingglass/
 - [x] Per-turn checkpoints and "restore to before this message"
 - [x] Diffing for agents that write to disk directly (the same checkpoint mechanism)
 - [x] `terminal/*` handlers with agent terminals visible in the panel
-- [x] @-mentions (files, folders, selection, terminal, git diff, `@browser`, `@browser-console`) and pasted/dropped images. `@problems` waits for diagnostics (LSP bridge, Phase 6)
+- [x] @-mentions (files, folders, selection, terminal, git diff, `@browser`, `@browser-console`) and pasted/dropped images. `@problems` (open files' diagnostics, from the LSP bridge)
 
 ### Phase 4: Browser and element picker
 
 - [x] Browser tab (`WebContentsView`, own partition, bounds sync, address bar, device sizes, DevTools button)
 - [x] Dev server URL detection from terminal output (plus `previewUrl` in `.lookingglass/settings.json`)
 - [x] CDP wrapper; console, exception and network error capture with a console panel
-- [ ] Element picker: inspect-mode overlay, multi-select, parent/child walking, region screenshot (inspect, Shift+multi-select and ↑ parent are in; drag-to-region and arrow-key / child walk still TODO)
-- [ ] Context collection (summary, trimmed markup, matched rules + computed styles, element screenshot) as ACP content blocks, with a chip preview and toggles (blocks and attachment `parts` exist; composer toggles still TODO)
+- [x] Element picker: inspect-mode overlay, Shift+multi-select, parent/child walking (buttons and ↑/↓ in the ask box), drag-to-region screenshot
+- [x] Context collection (summary, trimmed markup, matched rules + computed styles, element screenshot) as ACP content blocks, with a chip preview and toggles
 - [x] "Ask about this element…" popover → active chat / new chat
 - [x] Source resolution: React/Vue/Svelte metadata, stylesheet source maps, ripgrep guesses (reads `data-lg-source` when present)
-- [ ] `@lookingglass/source-attrs` dev plugin (Vite first)
 - [x] `browser_*` MCP tools with permission policies, "Agent is using this tab" banner and Stop
 
 ### Phase 5: Multi-agent
 
-- [ ] Codex via `codex-acp`
-- [ ] Gemini CLI
-- [ ] Agent registry UI, including custom agents
+- [x] Other agents via `~/.lookingglass/agents.json` (users install them; nothing agent-specific in Lookingglass)
+- [x] Agent registry UI for adding and editing `agents.json` entries (Settings → Agents)
 - [x] Several chats with different agents running at once (new-chat picker; each chat keeps its agent for life)
-- [ ] Session history + `session/load`
+- [x] Session history (`session/list`) and resuming with `session/load`, including picking a chat back up after its agent stopped (history stays with each agent, see open question 3)
 - [x] Mode switching (`session/set_mode`) when the agent reports modes
 
 ### Phase 6: Polish
 
-- [ ] Cmd+K inline edit
-- [ ] Remaining built-in editor MCP tools (diagnostics, open editors, reveal)
-- [ ] Per-workspace user MCP servers
-- [ ] LSP bridge (main process ↔ language servers) feeding editor markers, starting with TypeScript
-- [ ] Settings UI, themes, keybindings
-- [ ] Auto-update, code signing, notarization
+- [x] Cmd+K inline edit (Agent menu, runs as its own chat, result opens in review)
+- [x] Remaining built-in editor MCP tools: `get_diagnostics` (open editors and reveal were already there as `get_open_editors` / `open_file`)
+- [x] Per-workspace user MCP servers (`.lookingglass/settings.json`, allowed per folder)
+- [x] LSP bridge (main process ↔ language servers) feeding diagnostics into editor markers, starting with TypeScript
+- [x] Settings UI (⌘, or the gear in the activity bar): dark / light / system theme, rebindable menu shortcuts, custom agents
+- [x] Auto-update (electron-updater from GitHub releases), code signing and notarization config. The first signed release still needs a Developer ID certificate and Apple credentials, see [Releasing](#releasing)
 
 ### Later / maybe
 
-- [ ] Cursor SDK → ACP adapter (`packages/cursor-acp`)
-- [ ] Pluggable tab-completion provider (outside ACP)
 - [ ] Background agents in git worktrees (one worktree per chat, merge back)
 - [ ] Remote workspaces
 
@@ -535,13 +534,13 @@ lookingglass/
 
 ## Open questions
 
-1. **Edit interception coverage.** _Partly answered._ With `terminal: true` advertised, Claude Code (adapter 0.89) still ran a shell command with its own tool rather than `terminal/*`. Because review is checkpoint-based, file edits are caught however they are written. Codex is still to check.
+1. **Edit interception coverage.** _Partly answered._ With `terminal: true` advertised, Claude Code (adapter 0.89) still ran a shell command with its own tool rather than `terminal/*`. Because review is checkpoint-based, file edits are caught however they are written, whichever agent the user adds. Shell commands run by an agent's own tool don't show up in our terminal panel.
 2. **Pending edits vs. agent self-verification.** _Decided:_ edits apply to disk during the turn and are reviewed afterwards against the checkpoint, so the agent's own tests see its changes.
-3. **Session portability.** Should history be kept per agent only, or should we keep our own transcript so you can "continue this conversation in Codex" by replaying context into a new session?
-4. **Bundling adapters.** Ship pinned adapter binaries/packages with the app (reliable, larger download), or resolve them via `npx` on first use (smaller, needs Node on the user's machine)?
-5. **Language intelligence.** `@pierre/diffs` has no built-in language services (Monaco shipped TS/JS IntelliSense). Everything (diagnostics, hover, go-to-definition, completions) would come from an LSP bridge. How far to go in v1, given that agents already lean on their own tools for code understanding?
-6. **Source mapping on modern React.** Newer React versions removed `_debugSource`, so precise file:line for React apps probably needs the `source-attrs` plugin. Is asking users to add a dev plugin acceptable, or should we try to read source locations from React's owner stacks plus source maps? **Spike this early in Phase 4.**
-7. **Shared vs. per-workspace browser profile.** One browser partition for everything (logins carry over between projects) or one per workspace (cleaner, but you log in again for each project)?
+3. **Session portability.** _Decided:_ history stays with each agent and is resumed with `session/load`. We don't keep our own transcript to move a conversation between agents.
+4. **Bundling adapters.** _Decided:_ only Claude Code is bundled. Users install any other agent or adapter themselves and point `agents.json` at it.
+5. **Language intelligence.** `@pierre/diffs` has no built-in language services (Monaco shipped TS/JS IntelliSense). Everything (diagnostics, hover, go-to-definition, completions) would come from an LSP bridge. _Decided for v1:_ diagnostics only (TypeScript first), shown as editor markers and feeding `@problems` and the diagnostics MCP tool. Agents bring their own tools for code understanding.
+6. **Source mapping on modern React.** Newer React versions removed `_debugSource`, so precise file:line for React apps would have to come from React's owner stacks plus source maps. Until then it falls back to stylesheet source maps and search guesses. (We decided against shipping a dev plugin.)
+7. **Shared vs. per-workspace browser profile.** _Decided:_ one shared partition (`persist:lookingglass-browser`), so logins carry over between projects.
 8. **Name.** "Lookingglass" for now.
 
 ---
@@ -563,6 +562,18 @@ pnpm package      # installers for the current platform (unsigned for now)
 `scripts/smoke.mjs` creates a temporary git repo, launches the app with `LOOKINGGLASS_SMOKE=1` and `LOOKINGGLASS_WORKSPACE` pointing at it, and the app runs the checks in `src/main/smoke.ts`: explorer, opening and typing in a file, saving, search, git status and diff, the file watcher, path-traversal refusal, and a real shell in the terminal. Set `SCREENSHOT=out.png` to also save a screenshot. The window is shown during the run because typed input needs a focused window.
 
 `LOOKINGGLASS_WORKSPACE=/some/folder pnpm dev` opens a specific folder; otherwise the app reopens the last one.
+
+### Releasing
+
+```bash
+pnpm release      # build, sign, notarize and upload installers to a draft GitHub release
+```
+
+- **macOS signing** uses a "Developer ID Application" certificate from the keychain, or `CSC_LINK` (a .p12, path or base64) with `CSC_KEY_PASSWORD`. Without one the build is unsigned (`pnpm package` still works); `CSC_IDENTITY_AUTO_DISCOVERY=false` forces that. Hardened runtime is on, with the entitlements in `build/entitlements.mac.plist`.
+- **Notarization** runs when `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` (or `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`) are set, and is skipped otherwise.
+- **Windows signing** happens when `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` are set.
+- **Publishing** needs `GH_TOKEN` with access to `NietThijmen/looking-glass`. Releases are created as drafts; publish the draft on GitHub to ship it.
+- **Auto-update**: packaged builds check GitHub releases at startup and every six hours, download in the background and install on quit. "Check for Updates…" is in the app menu (Help on Windows/Linux). macOS only installs updates for signed builds, so updating starts working from the first signed release.
 
 ### How the skeleton is wired
 
@@ -590,8 +601,10 @@ pnpm package      # installers for the current platform (unsigned for now)
 - **Agent terminals** (`src/main/terminal/AgentTerminals.ts`): `terminal/create` runs the command in a real pty that appears as a tab in the terminal panel; the agent gets plain text (ANSI stripped, tail kept within `outputByteLimit`).
 - **Permissions**: `PermissionService` answers read/search/think requests with the agent's "allow once" option and asks the user for everything else. Stop answers open requests with `cancelled`, as ACP requires.
 - **Login**: if `session/new` fails with `auth_required`, the chat shows the agent's auth methods. Terminal methods run in a Lookingglass terminal tab; the user retries when done.
-- **Editor MCP server**: a Streamable HTTP MCP server on 127.0.0.1 with a random bearer token, passed to every session whose agent supports HTTP MCP. Tools: `get_workspace_info`, `get_open_editors`, `get_git_status`, `open_file`, and `browser_*` (see `src/main/browser/browserTools.ts`).
+- **Editor MCP server**: a Streamable HTTP MCP server on 127.0.0.1 with a random bearer token, passed to every session whose agent supports HTTP MCP. Tools: `get_workspace_info`, `get_open_editors`, `get_git_status`, `open_file`, `get_diagnostics`, and `browser_*` (see `src/main/browser/browserTools.ts`).
 - **Browser**: `BrowserService` (`src/main/browser/`) owns `WebContentsView` tabs in a `persist:lookingglass-browser` partition; the renderer reserves layout and syncs bounds over IPC. Picking uses CDP inspect mode (`elementContext.ts`); dev-server URLs are detected in `terminalBus.ts`. Smoke covers console capture, picking, MCP `browser_snapshot` / `browser_click`, and opening a detected local URL.
+- **Diagnostics**: `DiagnosticsService` (`src/main/lsp/`) runs `typescript-language-server` with Electron's Node and the workspace's own `typescript` (no TypeScript is bundled, so a folder without it gets no diagnostics). It keeps the server's documents in step with the editor's open TS/JS files, unsaved edits included, and with disk changes. Results become editor markers, `@problems`, and the `get_diagnostics` MCP tool, which can also open a file just to check it.
+- **Settings**: app preferences live in `settings.json` in the app's userData folder (`src/main/state/settings.ts`). The theme sets Electron's `nativeTheme`, and the renderer, `@pierre/diffs`, the file tree and the terminal all follow `prefers-color-scheme`. Keybindings are Electron accelerators that override the defaults in `src/shared/settings.ts`; the app menu is rebuilt when they change. Custom agents are read from and written to `~/.lookingglass/agents.json` (`LOOKINGGLASS_HOME` moves it). Smoke runs use a throwaway userData folder and agents file.
 - **Fake agent** (`src/main/acp/fakeAgent.ts`): a scriptable ACP agent used by unit tests and smoke runs, and offered in dev builds. Prompts `read <path>`, `edit`, `slow` and anything else exercise reads, permissions, cancel and streaming.
 - **Real-agent smoke**: `LOOKINGGLASS_SMOKE_CLAUDE=1 pnpm smoke` (or `smoke:packaged`) also runs one real Claude Code turn. It needs a logged-in `claude` and uses a few tokens.
 
@@ -601,5 +614,5 @@ To try a real agent you need its CLI logged in first, for example `claude` for C
 
 - Agent Client Protocol: https://agentclientprotocol.com
 - ACP spec and SDKs: https://github.com/agentclientprotocol
-- ACP adapters for Claude Code and Codex: https://github.com/agentclientprotocol
+- ACP adapters (Claude Code, Codex and others): https://github.com/agentclientprotocol
 - Model Context Protocol: https://modelcontextprotocol.io

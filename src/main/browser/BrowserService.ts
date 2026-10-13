@@ -50,6 +50,8 @@ interface Tab {
   shiftDown: boolean
   /** backendNodeId of the last picked element, for walking to its parent or child. */
   selected: number | null
+  /** Elements left by walking to a parent, so walking back down returns to them. */
+  walkedFrom: number[]
   selection: Picked[]
   agentUntil: number
   agentTimer: NodeJS.Timeout | undefined
@@ -122,6 +124,7 @@ export class BrowserService {
       capturing: false,
       shiftDown: false,
       selected: null,
+      walkedFrom: [],
       selection: [],
       agentUntil: 0,
       agentTimer: undefined,
@@ -129,8 +132,18 @@ export class BrowserService {
       bounds: null,
     }
     this.#tabs.set(id, tab)
-    // Load only once CDP listens, so console output from the first load isn't missed.
-    void this.#wire(tab).then(() => view.webContents.loadURL(normalizeUrl(url)).catch(() => undefined))
+    // Load only once CDP listens, so console output from the first load isn't missed. CDP
+    // commands hang until the view has a renderer, so start one with about:blank first and
+    // drop it from history once the real page is in.
+    void view.webContents
+      .loadURL('about:blank')
+      .catch(() => undefined)
+      .then(() => this.#wire(tab))
+      .then(() => view.webContents.loadURL(normalizeUrl(url)))
+      .then(
+        () => view.webContents.navigationHistory.removeEntryAtIndex(0),
+        () => undefined,
+      )
     this.#lastActive = id
     if (fromAgent) this.events.opened(id, url)
     return id
@@ -212,22 +225,20 @@ export class BrowserService {
     this.#emitState(tab)
   }
 
-  /** Replace the last picked element with its parent or first child element. */
+  /**
+   * Replace the last picked element with its parent or a child element. Going
+   * down retraces earlier steps up; otherwise it takes the first child.
+   */
   async walk(tabId: string, direction: 'parent' | 'child'): Promise<PickedElement | null> {
     const tab = this.#tab(tabId)
-    if (tab.selected === null) return null
-    const { object } = await tab.cdp.send('DOM.resolveNode', { backendNodeId: tab.selected })
-    const { result } = await tab.cdp.send('Runtime.callFunctionOn', {
-      objectId: object.objectId,
-      functionDeclaration:
-        direction === 'parent'
-          ? 'function () { return this.parentElement }'
-          : 'function () { return this.firstElementChild }',
-    })
-    if (!result.objectId) return null
-    const { node } = await tab.cdp.send('DOM.describeNode', { objectId: result.objectId })
-    if (!node.backendNodeId || node.localName === 'html') return null
-    const element = await this.#select(tab, node.backendNodeId, 'replace-last')
+    const from = tab.selected
+    if (from === null) return null
+    const next = direction === 'child' ? await this.#walkedChild(tab, from) : null
+    const target = next ?? (await this.#relative(tab, from, direction))
+    if (target === null) return null
+    if (direction === 'parent') tab.walkedFrom.push(from)
+    else if (next === null) tab.walkedFrom = []
+    const element = await this.#select(tab, target, 'replace-last')
     this.events.picked(element, 'replace-last')
     return element
   }
@@ -242,7 +253,11 @@ export class BrowserService {
     this.#emitState(tab)
     wc.focus()
     try {
-      const rect = (await wc.executeJavaScriptInIsolatedWorld(REGION_WORLD, [{ code: REGION_SCRIPT }], true)) as {
+      const rect = (await wc.executeJavaScriptInIsolatedWorld(
+        REGION_WORLD,
+        [{ code: REGION_SCRIPT }],
+        true,
+      )) as {
         x: number
         y: number
         width: number
@@ -254,7 +269,13 @@ export class BrowserService {
       if (!rect) return null
       const { data } = await tab.cdp.send('Page.captureScreenshot', {
         format: 'png',
-        clip: { x: rect.x + rect.scrollX, y: rect.y + rect.scrollY, width: rect.width, height: rect.height, scale: 1 },
+        clip: {
+          x: rect.x + rect.scrollX,
+          y: rect.y + rect.scrollY,
+          width: rect.width,
+          height: rect.height,
+          scale: 1,
+        },
       })
       const region: PickedRegion = {
         kind: 'region',
@@ -288,6 +309,7 @@ export class BrowserService {
     else tab.selection = tab.selection.filter((_, i) => i !== index)
     if (!tab.selection.some((p) => p.kind === 'element')) {
       tab.selected = null
+      tab.walkedFrom = []
       void tab.cdp.send('Overlay.hideHighlight').catch(() => undefined)
     }
   }
@@ -377,7 +399,8 @@ export class BrowserService {
 
   #remember(tab: Tab, item: Picked, mode: PickMode): void {
     if (mode === 'add') tab.selection = [...tab.selection, item]
-    else if (mode === 'replace-last' && tab.selection.length) tab.selection = [...tab.selection.slice(0, -1), item]
+    else if (mode === 'replace-last' && tab.selection.length)
+      tab.selection = [...tab.selection.slice(0, -1), item]
     else tab.selection = [item]
   }
 
@@ -398,6 +421,31 @@ export class BrowserService {
     )
     this.#remember(tab, element, mode)
     return element
+  }
+
+  /** The element we walked up from, if it is still a child of `from`. */
+  async #walkedChild(tab: Tab, from: number): Promise<number | null> {
+    const child = tab.walkedFrom.pop()
+    if (child === undefined) return null
+    const parent = await this.#relative(tab, child, 'parent').catch(() => null)
+    if (parent === from) return child
+    tab.walkedFrom = []
+    return null
+  }
+
+  async #relative(tab: Tab, backendNodeId: number, direction: 'parent' | 'child'): Promise<number | null> {
+    const { object } = await tab.cdp.send('DOM.resolveNode', { backendNodeId })
+    const { result } = await tab.cdp.send('Runtime.callFunctionOn', {
+      objectId: object.objectId,
+      functionDeclaration:
+        direction === 'parent'
+          ? 'function () { return this.parentElement }'
+          : 'function () { return this.firstElementChild }',
+    })
+    if (!result.objectId) return null
+    const { node } = await tab.cdp.send('DOM.describeNode', { objectId: result.objectId })
+    if (!node.backendNodeId || node.localName === 'html') return null
+    return node.backendNodeId
   }
 
   async #isolatedContext(tab: Tab): Promise<number> {
@@ -433,6 +481,7 @@ export class BrowserService {
       tab.isolatedContext = null
       tab.sheets.clear()
       tab.selected = null
+      tab.walkedFrom = []
     })
     wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
       if (isMainFrame && code !== -3)
@@ -450,7 +499,9 @@ export class BrowserService {
         void this.setPicking(tab.id, false)
       } else if (input.key === 'Escape' && tab.capturing) {
         event.preventDefault()
-        void wc.executeJavaScriptInIsolatedWorld(REGION_WORLD, [{ code: REGION_CANCEL }]).catch(() => undefined)
+        void wc
+          .executeJavaScriptInIsolatedWorld(REGION_WORLD, [{ code: REGION_CANCEL }])
+          .catch(() => undefined)
       }
     })
 
@@ -497,6 +548,7 @@ export class BrowserService {
         // Shift+click keeps picking and adds to the selection.
         const mode: PickMode = tab.shiftDown ? 'add' : 'replace'
         if (mode === 'replace') await this.setPicking(tab.id, false)
+        tab.walkedFrom = []
         try {
           this.events.picked(await this.#select(tab, backendNodeId, mode), mode)
         } catch (error) {

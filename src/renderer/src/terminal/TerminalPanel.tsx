@@ -11,12 +11,20 @@ import { attachTerminal } from './terminalBus'
 let ready: Promise<void> | null = null
 const ensureGhostty = (): Promise<void> => (ready ??= init())
 
-const theme = {
+const DARK = {
   background: '#0a0a0a',
   foreground: '#d4d4d4',
   cursor: '#009fff',
   selectionBackground: '#19283c',
 }
+const LIGHT = {
+  background: '#ffffff',
+  foreground: '#262626',
+  cursor: '#0077d9',
+  selectionBackground: '#cfe4fa',
+}
+const lightQuery = (): MediaQueryList => window.matchMedia('(prefers-color-scheme: light)')
+const currentTheme = (): typeof DARK => (lightQuery().matches ? LIGHT : DARK)
 
 interface Session {
   key: number
@@ -53,8 +61,11 @@ function TerminalView({
         fontFamily: "'SF Mono', 'JetBrains Mono', Menlo, monospace",
         cursorBlink: true,
         scrollback: 10_000,
-        theme,
+        theme: currentTheme(),
       })
+      const followTheme = (): void => term.renderer?.setTheme(currentTheme())
+      lightQuery().addEventListener('change', followTheme)
+      cleanups.push(() => lightQuery().removeEventListener('change', followTheme))
       const fit = new FitAddon()
       term.loadAddon(fit)
       term.open(containerRef.current)
@@ -185,7 +196,7 @@ export function TerminalPanel() {
             key={s.key}
             onClick={() => setActiveKey(s.key)}
             className={`group flex cursor-default items-center gap-1 rounded px-2 py-0.5 ${
-              s.key === activeKey ? 'bg-white/10 text-fg' : 'text-muted hover:text-fg'
+              s.key === activeKey ? 'bg-fg/10 text-fg' : 'text-muted hover:text-fg'
             }`}
           >
             <span className={s.exited ? 'line-through' : ''}>{s.title}</span>
@@ -212,7 +223,7 @@ export function TerminalPanel() {
           <button
             data-testid="open-detected-url"
             onClick={() => void useEditor.getState().openBrowser(detectedUrl)}
-            className="ml-auto inline-flex items-center gap-1 rounded px-2 py-0.5 text-accent hover:bg-white/5"
+            className="ml-auto inline-flex items-center gap-1 rounded px-2 py-0.5 text-accent hover:bg-fg/5"
           >
             <Icon icon={Globe} className={iconSize.sm} />
             Open {detectedUrl.replace(/^https?:\/\//, '')} in browser

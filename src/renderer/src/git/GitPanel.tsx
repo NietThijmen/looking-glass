@@ -13,7 +13,7 @@ function Entry({ entry }: { entry: GitStatusEntry }) {
       data-path={entry.path}
       title={entry.from ? `${entry.from} → ${entry.path}` : entry.path}
       onClick={() => void useEditor.getState().openDiff(entry.path)}
-      className="flex h-[22px] cursor-default items-center gap-1.5 px-3 hover:bg-white/5"
+      className="flex h-[22px] cursor-default items-center gap-1.5 px-3 hover:bg-fg/5"
     >
       <span
         className={`truncate ${gitColor[entry.status]} ${entry.status === 'deleted' ? 'line-through' : ''}`}
@@ -21,7 +21,9 @@ function Entry({ entry }: { entry: GitStatusEntry }) {
         {basename(entry.path)}
       </span>
       <span className="truncate text-[11px] text-muted">{dirname(entry.path)}</span>
-      <span className={`ml-auto flex items-center gap-1 pl-2 font-mono text-[10px] ${gitColor[entry.status]}`}>
+      <span
+        className={`ml-auto flex items-center gap-1 pl-2 font-mono text-[10px] ${gitColor[entry.status]}`}
+      >
         {entry.staged ? <StatusDot /> : null}
         {gitLetter[entry.status]}
       </span>
@@ -98,7 +100,9 @@ export function GitPanel() {
           className="w-full resize-none rounded border border-border bg-bg px-2 py-1.5 text-[13px] outline-none select-text focus:border-accent disabled:opacity-50"
         />
         {feedback && (
-          <p className={`mt-1.5 text-[11px] ${feedback.ok ? 'text-green-400' : 'text-red-400'}`}>{feedback.text}</p>
+          <p className={`mt-1.5 text-[11px] ${feedback.ok ? 'text-green-400' : 'text-red-400'}`}>
+            {feedback.text}
+          </p>
         )}
         <div className="mt-2 flex flex-wrap gap-2">
           <button
@@ -106,7 +110,7 @@ export function GitPanel() {
             data-testid="git-commit"
             disabled={busy || !message.trim()}
             onClick={() => void runCommit(false)}
-            className="rounded border border-border px-3 py-1 text-[12px] hover:bg-white/5 disabled:opacity-40"
+            className="rounded border border-border px-3 py-1 text-[12px] hover:bg-fg/5 disabled:opacity-40"
           >
             Commit
           </button>

@@ -105,7 +105,9 @@ export function elementSections(el: PickedElement): { summary: string; markup: s
     el.framework
       ? `Framework: ${el.framework.name}${el.framework.component ? `, component <${el.framework.component}>` : ''}`
       : '',
-    exact.length ? `Rendered by: ${exact.map((s) => `${s.path}${s.line ? `:${s.line}` : ''} (${s.via})`).join(', ')}` : '',
+    exact.length
+      ? `Rendered by: ${exact.map((s) => `${s.path}${s.line ? `:${s.line}` : ''} (${s.via})`).join(', ')}`
+      : '',
     styleFiles.length ? `Styles in: ${where(styleFiles)}` : '',
     guesses.length ? `Possibly rendered by (guess from text search): ${where(guesses)}` : '',
   ]
@@ -113,7 +115,9 @@ export function elementSections(el: PickedElement): { summary: string; markup: s
     .join('\n')
 
   const markup = [
-    el.ancestors.length ? `Parent chain: ${[...el.ancestors, el.selector.split(' > ').at(-1)].join(' > ')}` : '',
+    el.ancestors.length
+      ? `Parent chain: ${[...el.ancestors, el.selector.split(' > ').at(-1)].join(' > ')}`
+      : '',
     'HTML:',
     '```html',
     el.html,
@@ -130,7 +134,8 @@ export function elementSections(el: PickedElement): { summary: string; markup: s
     styleLines.push('```')
   }
   const computed = Object.entries(el.computed)
-  if (computed.length) styleLines.push('Computed styles: ' + computed.map(([k, v]) => `${k}: ${v}`).join('; '))
+  if (computed.length)
+    styleLines.push('Computed styles: ' + computed.map(([k, v]) => `${k}: ${v}`).join('; '))
   return { summary, markup, styles: styleLines.join('\n') }
 }
 

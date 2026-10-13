@@ -61,7 +61,12 @@ async function isTrusted(deps: BrowserToolDeps, url: string): Promise<boolean> {
 async function interactionAllowed(deps: BrowserToolDeps, url: string): Promise<string | null> {
   const o = origin(url)
   if ((await isTrusted(deps, url)) || (o && deps.allowedOrigins.has(o))) return null
-  if (!(await deps.confirm('Let the agent interact with this page?', `${url}\n\nThe agent can click and type as you, with your cookies for this site. Allowing applies to the whole site until Lookingglass restarts.`)))
+  if (
+    !(await deps.confirm(
+      'Let the agent interact with this page?',
+      `${url}\n\nThe agent can click and type as you, with your cookies for this site. Allowing applies to the whole site until Lookingglass restarts.`,
+    ))
+  )
     return 'The user declined to let the agent interact with this page.'
   if (o) deps.allowedOrigins.add(o)
   return null

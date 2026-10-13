@@ -5,8 +5,9 @@ import { useEditor } from '../store/editor'
 import { useReview } from '../store/review'
 import { useUi } from '../store/ui'
 import { useWorkspace } from '../store/workspace'
-import { Check, Chevron, Icon, Plus, Sparkles, StatusDot, X, iconSize } from '../ui/icon'
+import { Check, Chevron, History, Icon, Plus, Sparkles, StatusDot, X, iconSize } from '../ui/icon'
 import { Composer } from './Composer'
+import { HistoryMenu } from './HistoryMenu'
 import { TranscriptView } from './TranscriptView'
 
 function PermissionCards({ sessionId }: { sessionId: string }) {
@@ -29,7 +30,7 @@ function PermissionCards({ sessionId }: { sessionId: string }) {
             data-option-id={option.optionId}
             onClick={() => respond(request.requestId, option.optionId)}
             className={`rounded px-2 py-0.5 text-[12px] ${
-              option.kind.startsWith('allow') ? 'bg-accent text-bg' : 'border border-border hover:bg-white/5'
+              option.kind.startsWith('allow') ? 'bg-accent text-bg' : 'border border-border hover:bg-fg/5'
             }`}
           >
             {option.name}
@@ -51,7 +52,7 @@ function AuthView({ chat }: { chat: Chat }) {
       {chat.auth.methods.map((method) => (
         <button
           key={method.id}
-          className="block w-full rounded border border-border px-3 py-1.5 text-left hover:bg-white/5"
+          className="block w-full rounded border border-border px-3 py-1.5 text-left hover:bg-fg/5"
           onClick={async () => {
             setError(null)
             try {
@@ -119,7 +120,7 @@ function ChangesBar() {
               key={entry.path}
               data-testid="change-entry"
               data-path={entry.path}
-              className="group flex h-[22px] cursor-default items-center gap-1.5 px-3 hover:bg-white/5"
+              className="group flex h-[22px] cursor-default items-center gap-1.5 px-3 hover:bg-fg/5"
               onClick={() => useEditor.getState().openReview(entry.path)}
             >
               <span className={`truncate ${statusColor[entry.status]}`}>{basename(entry.path)}</span>
@@ -179,7 +180,11 @@ function ChatView({ chat }: { chat: Chat }) {
         }}
         className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3"
       >
-        {chat.state === 'starting' && <div className="text-muted">Starting agent…</div>}
+        {chat.state === 'starting' && (
+          <div className="text-muted">
+            {chat.resumeId ? 'Loading the earlier session…' : 'Starting agent…'}
+          </div>
+        )}
         {chat.state === 'error' && (
           <div className="space-y-2">
             <pre className="max-h-64 overflow-auto text-[11px] whitespace-pre-wrap text-red-400 select-text">
@@ -189,7 +194,7 @@ function ChatView({ chat }: { chat: Chat }) {
               className="text-[12px] text-accent hover:underline"
               onClick={() => void useAgents.getState().retryChat(chat.key)}
             >
-              Retry
+              {chat.resumeId ? 'Resume' : 'Retry'}
             </button>
           </div>
         )}
@@ -226,7 +231,7 @@ function NewChatMenu({ onClose }: { onClose(): void }) {
             onClose()
             void useAgents.getState().newChat(agent.id)
           }}
-          className="block w-full px-3 py-1.5 text-left hover:bg-white/5"
+          className="block w-full px-3 py-1.5 text-left hover:bg-fg/5"
         >
           {agent.label}
         </button>
@@ -240,7 +245,8 @@ export function AgentPanel() {
   const chats = useAgents((s) => s.chats)
   const activeKey = useAgents((s) => s.activeKey)
   const agents = useAgents((s) => s.agents)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [menu, setMenu] = useState<'new' | 'history' | null>(null)
+  const toggle = (which: 'new' | 'history'): void => setMenu((m) => (m === which ? null : which))
   const active = chats.find((c) => c.key === activeKey)
   const label = (id: string): string => agents.find((a) => a.id === id)?.label ?? id
 
@@ -253,12 +259,12 @@ export function AgentPanel() {
               key={chat.key}
               onClick={() => useAgents.getState().activate(chat.key)}
               className={`group flex shrink-0 cursor-default items-center gap-1 rounded px-2 py-0.5 text-[12px] ${
-                chat.key === activeKey ? 'bg-white/10 text-fg' : 'text-muted hover:text-fg'
+                chat.key === activeKey ? 'bg-fg/10 text-fg' : 'text-muted hover:text-fg'
               }`}
             >
               {chat.busy && <StatusDot className="text-accent" />}
-              <span>
-                {label(chat.agentId)} {i + 1}
+              <span className="max-w-40 truncate" title={chat.title}>
+                {chat.title ?? `${label(chat.agentId)} ${i + 1}`}
               </span>
               <button
                 aria-label="Close chat"
@@ -274,15 +280,25 @@ export function AgentPanel() {
           ))}
         </div>
         <button
+          data-testid="history"
+          disabled={!hasWorkspace}
+          title="Earlier sessions"
+          onClick={() => toggle('history')}
+          className="rounded px-1.5 text-muted hover:text-fg disabled:opacity-40"
+        >
+          <Icon icon={History} className={iconSize.sm} />
+        </button>
+        <button
           data-testid="new-chat"
           disabled={!hasWorkspace}
           title="New chat"
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={() => toggle('new')}
           className="rounded px-1.5 text-muted hover:text-fg disabled:opacity-40"
         >
           <Icon icon={Plus} className={iconSize.sm} />
         </button>
-        {menuOpen && <NewChatMenu onClose={() => setMenuOpen(false)} />}
+        {menu === 'new' && <NewChatMenu onClose={() => setMenu(null)} />}
+        {menu === 'history' && <HistoryMenu onClose={() => setMenu(null)} />}
       </div>
 
       {active ? (
@@ -298,7 +314,7 @@ export function AgentPanel() {
                   data-testid="start-agent"
                   data-agent-id={agent.id}
                   onClick={() => void useAgents.getState().newChat(agent.id)}
-                  className="block w-full rounded border border-border px-3 py-2 text-left text-fg hover:bg-white/5"
+                  className="block w-full rounded border border-border px-3 py-2 text-left text-fg hover:bg-fg/5"
                 >
                   {agent.label}
                 </button>

@@ -1,6 +1,6 @@
 import { prepareFileTreeInput, type FileTreePreparedInput } from '@pierre/trees'
 import { FileTree, useFileTree } from '@pierre/trees/react'
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { useEditor } from '../store/editor'
 import { useReview } from '../store/review'
 import { useWorkspace } from '../store/workspace'
@@ -9,13 +9,14 @@ import { toTreeGitEntries } from './treeGit'
 const treeHostStyle: CSSProperties = {
   height: '100%',
   minHeight: 0,
-  // Align with app chrome / pierre-dark editor surface (see styles.css @theme).
-  ['--trees-bg-override' as string]: '#171717',
-  ['--trees-fg-override' as string]: '#fafafa',
-  ['--trees-fg-muted-override' as string]: '#a3a3a3',
-  ['--trees-accent-override' as string]: '#009fff',
-  ['--trees-selected-bg-override' as string]: 'color-mix(in srgb, #009fff 18%, #171717)',
-  ['--trees-border-color-override' as string]: '#262626',
+  // Follow the app chrome colours (styles.css), including the light theme.
+  ['--trees-bg-override' as string]: 'var(--color-panel)',
+  ['--trees-fg-override' as string]: 'var(--color-fg)',
+  ['--trees-fg-muted-override' as string]: 'var(--color-muted)',
+  ['--trees-accent-override' as string]: 'var(--color-accent)',
+  ['--trees-selected-bg-override' as string]:
+    'color-mix(in srgb, var(--color-accent) 18%, var(--color-panel))',
+  ['--trees-border-color-override' as string]: 'var(--color-border)',
 }
 
 export function ExplorerTree() {
@@ -26,9 +27,10 @@ export function ExplorerTree() {
   const reviewEntries = useReview((s) => s.entries)
   const activePath = useEditor((s) => s.tabs.find((t) => t.id === s.activeId)?.path)
 
-  const [preparedInput, setPreparedInput] = useState<FileTreePreparedInput | null>(null)
-  const openFileRef = useRef<(path: string) => void>(() => undefined)
-  openFileRef.current = (path) => void useEditor.getState().openFile(path)
+  const preparedInput = useMemo<FileTreePreparedInput | null>(
+    () => (info && filePaths ? prepareFileTreeInput(filePaths, { flattenEmptyDirectories: true }) : null),
+    [info, filePaths],
+  )
 
   const reviewedPaths = useMemo(() => {
     const set = new Set<string>()
@@ -47,7 +49,9 @@ export function ExplorerTree() {
 
   const modelRef = useRef<ReturnType<typeof useFileTree>['model'] | null>(null)
   const reviewedRef = useRef(reviewedPaths)
-  reviewedRef.current = reviewedPaths
+  useEffect(() => {
+    reviewedRef.current = reviewedPaths
+  }, [reviewedPaths])
 
   const { model } = useFileTree({
     paths: [],
@@ -58,22 +62,16 @@ export function ExplorerTree() {
       const path = selected[selected.length - 1]
       if (!path) return
       const item = modelRef.current?.getItem(path)
-      if (item && !item.isDirectory()) openFileRef.current(path)
+      if (item && !item.isDirectory()) void useEditor.getState().openFile(path)
     },
     renderRowDecoration: ({ item }) => {
       if (!reviewedRef.current.has(item.path)) return null
       return { text: 'review', title: 'Agent changes to review', color: '#fbbf24' }
     },
   })
-  modelRef.current = model
-
   useEffect(() => {
-    if (!info) {
-      setPreparedInput(null)
-      return
-    }
-    if (filePaths) setPreparedInput(prepareFileTreeInput(filePaths, { flattenEmptyDirectories: true }))
-  }, [info, filePaths])
+    modelRef.current = model
+  }, [model])
 
   useEffect(() => {
     if (!preparedInput) return

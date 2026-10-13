@@ -153,7 +153,7 @@ export function SearchPanel() {
         {result?.files.map((file) => (
           <div key={file.path}>
             <div
-              className="flex h-[22px] cursor-default items-center gap-1.5 px-2 hover:bg-white/5"
+              className="flex h-[22px] cursor-default items-center gap-1.5 px-2 hover:bg-fg/5"
               onClick={() => setCollapsed((c) => ({ ...c, [file.path]: !c[file.path] }))}
             >
               <span className="flex w-3 items-center justify-center text-muted">
@@ -175,7 +175,7 @@ export function SearchPanel() {
                       .getState()
                       .openFile(file.path, { line: match.line, column: match.ranges[0]?.[0] ?? 0 })
                   }
-                  className="flex h-[22px] cursor-default items-center gap-2 pr-2 pl-8 hover:bg-white/5"
+                  className="flex h-[22px] cursor-default items-center gap-2 pr-2 pl-8 hover:bg-fg/5"
                 >
                   <span className="w-8 shrink-0 text-right font-mono text-[10px] text-muted">
                     {match.line}

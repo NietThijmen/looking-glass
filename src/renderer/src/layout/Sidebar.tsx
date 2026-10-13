@@ -1,44 +1,63 @@
 import type { LucideIcon } from 'lucide-react'
-import { Files, GitBranch, History, Search } from 'lucide-react'
+import { Files, GitBranch, History, Search, Settings } from 'lucide-react'
+import type { MenuCommand } from '../../../shared/ipc'
 import { CommitsPanel } from '../git/CommitsPanel'
 import { Explorer } from '../explorer/Explorer'
 import { GitPanel } from '../git/GitPanel'
 import { SearchPanel } from '../search/SearchPanel'
+import { useEditor } from '../store/editor'
+import { useShortcut } from '../store/settings'
 import { useUi, type SidebarView } from '../store/ui'
 import { useWorkspace } from '../store/workspace'
 import { Icon, iconSize } from '../ui/icon'
 
-const views: Array<{ id: SidebarView; label: string; icon: LucideIcon; hint: string }> = [
-  { id: 'explorer', label: 'Explorer', icon: Files, hint: '⇧⌘E' },
-  { id: 'search', label: 'Search', icon: Search, hint: '⇧⌘F' },
-  { id: 'git', label: 'Source Control', icon: GitBranch, hint: '⌃⇧G' },
-  { id: 'commits', label: 'Commits', icon: History, hint: '⌃⇧H' },
+const views: Array<{ id: SidebarView; label: string; icon: LucideIcon; command: MenuCommand }> = [
+  { id: 'explorer', label: 'Explorer', icon: Files, command: 'show-explorer' },
+  { id: 'search', label: 'Search', icon: Search, command: 'show-search' },
+  { id: 'git', label: 'Source Control', icon: GitBranch, command: 'show-git' },
+  { id: 'commits', label: 'Commits', icon: History, command: 'show-commits' },
 ]
 
-export function ActivityBar() {
+function ActivityButton({ view: v, changes }: { view: (typeof views)[number]; changes: number }) {
   const current = useUi((s) => s.sidebar)
+  const hint = useShortcut(v.command)
+  return (
+    <button
+      title={`${v.label} (${hint})`}
+      aria-pressed={current === v.id}
+      data-testid={`activity-${v.id}`}
+      onClick={() => useUi.getState().showSidebar(v.id)}
+      className={`relative flex size-9 items-center justify-center rounded ${
+        current === v.id ? 'text-fg' : 'text-muted hover:text-fg'
+      }`}
+    >
+      <Icon icon={v.icon} className={iconSize.lg} />
+      {v.id === 'git' && changes > 0 && (
+        <span className="absolute right-0.5 bottom-0.5 rounded-full bg-accent px-1 text-[9px] leading-tight text-bg">
+          {changes > 99 ? '99+' : changes}
+        </span>
+      )}
+    </button>
+  )
+}
+
+export function ActivityBar() {
   const changes = useWorkspace((s) => s.git?.entries.length ?? 0)
+  const settingsHint = useShortcut('open-settings')
   return (
     <nav className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-border bg-panel pt-2">
       {views.map((v) => (
-        <button
-          key={v.id}
-          title={`${v.label} (${v.hint})`}
-          aria-pressed={current === v.id}
-          data-testid={`activity-${v.id}`}
-          onClick={() => useUi.getState().showSidebar(v.id)}
-          className={`relative flex size-9 items-center justify-center rounded ${
-            current === v.id ? 'text-fg' : 'text-muted hover:text-fg'
-          }`}
-        >
-          <Icon icon={v.icon} className={iconSize.lg} />
-          {v.id === 'git' && changes > 0 && (
-            <span className="absolute right-0.5 bottom-0.5 rounded-full bg-accent px-1 text-[9px] leading-tight text-bg">
-              {changes > 99 ? '99+' : changes}
-            </span>
-          )}
-        </button>
+        <ActivityButton key={v.id} view={v} changes={changes} />
       ))}
+      <span className="flex-1" />
+      <button
+        title={`Settings (${settingsHint})`}
+        data-testid="activity-settings"
+        onClick={() => useEditor.getState().openSettings()}
+        className="mb-2 flex size-9 items-center justify-center rounded text-muted hover:text-fg"
+      >
+        <Icon icon={Settings} className={iconSize.lg} />
+      </button>
     </nav>
   )
 }

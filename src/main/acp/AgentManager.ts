@@ -8,6 +8,7 @@ import type {
   ContentBlock,
   NewSessionResult,
   PromptResult,
+  SessionHistory,
 } from '../../shared/agent'
 import type { EditorState } from '../editor/EditorState'
 import type { EditorMcpHandle } from '../mcp/editorMcpServer'
@@ -24,6 +25,8 @@ export interface AgentManagerDeps {
   editor: EditorState
   permissions: PermissionService
   mcp(): EditorMcpHandle | null
+  /** The workspace's own MCP servers, once the user has allowed them. */
+  workspaceMcpServers?(): Promise<McpServer[]>
   onStatus(agentId: string, status: AgentStatus): void
   onSessionUpdate(notification: SessionNotification): void
   /** Optional so tests can run without them. */
@@ -43,6 +46,9 @@ export function sliceLines(content: string, line?: number | null, limit?: number
 }
 
 const AUTH_REQUIRED_CODE = RequestError.authRequired().code
+/** `session/list` pages to read; history beyond that is rarely what anyone is looking for. */
+const MAX_HISTORY_PAGES = 5
+const MAX_HISTORY = 50
 
 interface RunningAgent {
   client: AcpClient
@@ -70,28 +76,57 @@ export class AgentManager {
   }
 
   async newSession(agentId: string): Promise<NewSessionResult | AuthRequired> {
-    const root = this.deps.workspace.root
-    if (!root) throw new Error('Open a folder before starting an agent session.')
+    const root = this.#root()
     const agent = await this.#ensure(agentId)
     try {
-      const response = await agent.client.newSession(root, this.#mcpServers(agent.client))
+      const response = await agent.client.newSession(root, await this.#mcpServers(agent.client))
       this.#sessions.set(response.sessionId, agentId)
-      return {
-        sessionId: response.sessionId,
-        agentId,
-        modes: response.modes ?? null,
-        promptCapabilities: agent.client.initializeResponse?.agentCapabilities?.promptCapabilities ?? {},
-      }
+      return this.#sessionResult(agent.client, agentId, response.sessionId, response.modes)
     } catch (error) {
-      if (error instanceof RequestError && error.code === AUTH_REQUIRED_CODE) {
-        return {
-          authRequired: true,
+      return this.#authRequired(agent.client, agentId, error)
+    }
+  }
+
+  /** Past sessions for this workspace, from the agent's own `session/list`. */
+  async listSessions(agentId: string): Promise<SessionHistory> {
+    const root = this.#root()
+    const agent = await this.#ensure(agentId)
+    const caps = agent.client.initializeResponse?.agentCapabilities
+    if (!caps?.loadSession || !caps.sessionCapabilities?.list) return { supported: false, sessions: [] }
+    const sessions: SessionHistory['sessions'] = []
+    let cursor: string | undefined
+    for (let page = 0; page < MAX_HISTORY_PAGES && sessions.length < MAX_HISTORY; page++) {
+      const response = await agent.client.listSessions(root, cursor)
+      for (const s of response.sessions) {
+        sessions.push({
+          sessionId: s.sessionId,
           agentId,
-          methods: agent.client.initializeResponse?.authMethods ?? [],
-          message: error.message,
-        }
+          title: s.title ?? null,
+          updatedAt: s.updatedAt ?? null,
+        })
       }
-      throw error
+      if (!response.nextCursor) break
+      cursor = response.nextCursor
+    }
+    sessions.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+    return { supported: true, sessions: sessions.slice(0, MAX_HISTORY) }
+  }
+
+  /** Resume a past session. Its history streams through `onSessionUpdate` before this resolves. */
+  async loadSession(agentId: string, sessionId: string): Promise<NewSessionResult | AuthRequired> {
+    const root = this.#root()
+    const agent = await this.#ensure(agentId)
+    if (!agent.client.initializeResponse?.agentCapabilities?.loadSession) {
+      throw new Error('This agent cannot resume earlier sessions.')
+    }
+    // Mapped before the request: tool calls during the replay are routed by session.
+    this.#sessions.set(sessionId, agentId)
+    try {
+      const response = await agent.client.loadSession(sessionId, root, await this.#mcpServers(agent.client))
+      return this.#sessionResult(agent.client, agentId, sessionId, response.modes)
+    } catch (error) {
+      this.#sessions.delete(sessionId)
+      return this.#authRequired(agent.client, agentId, error)
     }
   }
 
@@ -157,6 +192,41 @@ export class AgentManager {
     this.#sessions.clear()
   }
 
+  #root(): string {
+    const root = this.deps.workspace.root
+    if (!root) throw new Error('Open a folder before starting an agent session.')
+    return root
+  }
+
+  #sessionResult(
+    client: AcpClient,
+    agentId: string,
+    sessionId: string,
+    modes: NewSessionResult['modes'] | undefined,
+  ): NewSessionResult {
+    const caps = client.initializeResponse?.agentCapabilities
+    return {
+      sessionId,
+      agentId,
+      modes: modes ?? null,
+      promptCapabilities: caps?.promptCapabilities ?? {},
+      canResume: caps?.loadSession === true,
+    }
+  }
+
+  /** An `auth_required` error becomes the login prompt; anything else is rethrown. */
+  #authRequired(client: AcpClient, agentId: string, error: unknown): AuthRequired {
+    if (error instanceof RequestError && error.code === AUTH_REQUIRED_CODE) {
+      return {
+        authRequired: true,
+        agentId,
+        methods: client.initializeResponse?.authMethods ?? [],
+        message: error.message,
+      }
+    }
+    throw error
+  }
+
   #requireTerminals(): AgentTerminals {
     if (!this.deps.terminals) throw RequestError.methodNotFound('terminal/create')
     return this.deps.terminals
@@ -169,11 +239,17 @@ export class AgentManager {
     return agent.client
   }
 
-  #mcpServers(client: AcpClient): McpServer[] {
+  /** The built-in editor server plus the workspace's own, minus transports the agent can't use. */
+  async #mcpServers(client: AcpClient): Promise<McpServer[]> {
+    const caps = client.initializeResponse?.agentCapabilities?.mcpCapabilities
     const mcp = this.deps.mcp()
-    const supportsHttp = client.initializeResponse?.agentCapabilities?.mcpCapabilities?.http
-    if (!mcp || !supportsHttp) return []
-    return [{ type: 'http', name: 'lookingglass', url: mcp.url, headers: mcp.headers }]
+    const servers: McpServer[] = mcp
+      ? [{ type: 'http', name: 'lookingglass', url: mcp.url, headers: mcp.headers }]
+      : []
+    servers.push(...((await this.deps.workspaceMcpServers?.()) ?? []))
+    return servers.filter(
+      (s) => !('type' in s) || (s.type === 'http' ? !!caps?.http : s.type === 'sse' ? !!caps?.sse : false),
+    )
   }
 
   async #ensure(agentId: string): Promise<RunningAgent> {

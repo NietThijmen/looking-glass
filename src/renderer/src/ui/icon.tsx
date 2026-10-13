@@ -3,6 +3,7 @@ import type { PlanEntry, ToolKind } from '@agentclientprotocol/sdk'
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowDown,
   ArrowLeftRight,
   ArrowRight,
   ArrowUp,
@@ -19,6 +20,7 @@ import {
   Folder,
   GitBranch,
   Globe,
+  History,
   Image,
   Loader2,
   Paperclip,
@@ -30,6 +32,7 @@ import {
   Settings,
   Sparkles,
   Square,
+  SquareDashed,
   Terminal,
   Trash2,
   X,
@@ -46,11 +49,7 @@ export const iconSize = {
   lg: 'size-5 shrink-0',
 } as const
 
-export function Icon({
-  icon: I,
-  className,
-  ...props
-}: { icon: LucideIcon } & LucideProps) {
+export function Icon({ icon: I, className, ...props }: { icon: LucideIcon } & LucideProps) {
   return <I className={className ?? iconSize.sm} aria-hidden {...props} />
 }
 
@@ -87,6 +86,7 @@ export const mentionOptionIcon: Record<MentionOption['kind'], LucideIcon> = {
   'git-diff': Diff,
   browser: Globe,
   'browser-console': AlertTriangle,
+  problems: XCircle,
 }
 
 export const toolKindIcon: Record<ToolKind, LucideIcon> = {
@@ -104,6 +104,7 @@ export const toolKindIcon: Record<ToolKind, LucideIcon> = {
 
 export {
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
@@ -113,13 +114,16 @@ export {
   Diff,
   GitBranch,
   Globe,
+  History,
   Image,
+  Loader2,
   Paperclip,
   Plus,
   RotateCcw,
   RotateCw,
   Settings,
   Sparkles,
+  SquareDashed,
   Terminal,
   X,
   XCircle,

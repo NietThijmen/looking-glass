@@ -1,4 +1,4 @@
-import type { SessionNotification } from '@agentclientprotocol/sdk'
+import type { McpServer, SessionNotification } from '@agentclientprotocol/sdk'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -36,7 +36,7 @@ let reviewed: ReviewEntry[]
 let agentWrites: string[]
 let terminalService: TerminalService
 
-async function setup(args: string[] = []) {
+async function setup(args: string[] = [], workspaceMcpServers: McpServer[] = []) {
   const workspace = new WorkspaceService()
   await workspace.open(tmp)
   editor = new EditorState()
@@ -65,6 +65,7 @@ async function setup(args: string[] = []) {
     editor,
     permissions,
     mcp: () => null,
+    workspaceMcpServers: async () => workspaceMcpServers,
     onStatus: (_id, s) => statuses.push(s),
     onSessionUpdate: (n) => updates.push(n),
   })
@@ -196,5 +197,47 @@ describe('AgentManager with the fake agent', () => {
     const sessionId = await newSession()
     await manager.prompt(sessionId, [{ type: 'text', text: 'run printf "\\033[31mred\\033[0m-$((6*7))"' }])
     expect(agentText()).toContain('Exit 0. Output: red-42')
+  })
+
+  it('lists past sessions and replays one with session/load', async () => {
+    await setup()
+    const sessionId = await newSession()
+    await manager.prompt(sessionId, [{ type: 'text', text: 'remember me' }])
+
+    const history = await manager.listSessions('fake')
+    expect(history.supported).toBe(true)
+    expect(history.sessions).toEqual([
+      expect.objectContaining({ sessionId, agentId: 'fake', title: 'remember me' }),
+    ])
+
+    updates = []
+    const loaded = await manager.loadSession('fake', sessionId)
+    expect(loaded).toMatchObject({ sessionId, canResume: true })
+    const replayed = updates.filter((n) => n.sessionId === sessionId).map((n) => n.update.sessionUpdate)
+    expect(replayed[0]).toBe('user_message_chunk')
+    expect(agentText()).toContain('You said: **remember me**')
+
+    // The loaded session takes prompts like a new one.
+    const result = await manager.prompt(sessionId, [{ type: 'text', text: 'again' }])
+    expect(result.stopReason).toBe('end_turn')
+  })
+
+  it("passes the workspace's MCP servers to new sessions", async () => {
+    await setup(
+      [],
+      [
+        { name: 'db', command: 'db-mcp', args: [], env: [] },
+        // The fake agent has no HTTP MCP support, so this one is left out.
+        { type: 'http', name: 'docs', url: 'http://127.0.0.1:1/mcp', headers: [] },
+      ],
+    )
+    const sessionId = await newSession()
+    await manager.prompt(sessionId, [{ type: 'text', text: 'mcp' }])
+    expect(agentText()).toContain('MCP servers: db')
+  })
+
+  it('refuses to load a session the agent does not know', async () => {
+    await setup()
+    await expect(manager.loadSession('fake', 'nope')).rejects.toThrow()
   })
 })

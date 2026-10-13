@@ -5,7 +5,9 @@ import { BrowserTab } from '../browser/BrowserTab'
 import { ReviewView } from '../review/ReviewView'
 import { useBrowser } from '../store/browser'
 import { useReview } from '../store/review'
-import { Diff, Globe, Icon, Sparkles, X, iconSize } from '../ui/icon'
+import { SettingsView } from '../settings/SettingsView'
+import { useShortcut } from '../store/settings'
+import { Diff, Globe, Icon, Settings, Sparkles, X, iconSize } from '../ui/icon'
 import { GitDiffView } from './GitDiffView'
 
 function TabLabel({ tab }: { tab: Tab }) {
@@ -34,8 +36,13 @@ function TabLabel({ tab }: { tab: Tab }) {
       {tab.kind === 'diff' && <Icon icon={Diff} className={`${iconSize.sm} text-accent`} />}
       {tab.kind === 'review' && <Icon icon={Sparkles} className={`${iconSize.sm} text-amber-300`} />}
       {tab.kind === 'browser' && <Icon icon={Globe} className={iconSize.sm} />}
+      {tab.kind === 'settings' && <Icon icon={Settings} className={iconSize.sm} />}
       <span className="truncate">
-        {tab.kind === 'browser' ? browserTitle || 'New tab' : basename(tab.path)}
+        {tab.kind === 'browser'
+          ? browserTitle || 'New tab'
+          : tab.kind === 'settings'
+            ? 'Settings'
+            : basename(tab.path)}
       </span>
       <button
         aria-label="Close tab"
@@ -58,15 +65,29 @@ export function openBrowserTab(): void {
   void useEditor.getState().openBrowser(useBrowser.getState().detectedUrls[0] ?? 'about:blank')
 }
 
+function ShortcutHints() {
+  const open = useShortcut('open-folder')
+  const search = useShortcut('show-search')
+  const terminal = useShortcut('toggle-terminal')
+  const browser = useShortcut('new-browser-tab')
+  const edit = useShortcut('inline-edit')
+  return (
+    <div className="mt-4 font-mono text-[11px]">
+      {open} open folder · {search} search · {terminal} terminal · {browser} browser · {edit} edit with agent
+    </div>
+  )
+}
+
 function NewBrowserTabButton({ labelled = false }: { labelled?: boolean }) {
+  const hint = useShortcut('new-browser-tab')
   return (
     <button
       data-testid="new-browser-tab"
-      title="New browser tab (⇧⌘B)"
+      title={`New browser tab (${hint})`}
       onClick={openBrowserTab}
       className={
         labelled
-          ? 'rounded border border-border px-3 py-1 hover:bg-white/5'
+          ? 'rounded border border-border px-3 py-1 hover:bg-fg/5'
           : 'shrink-0 px-3 text-muted hover:text-fg'
       }
     >
@@ -87,6 +108,7 @@ function ActiveTab({ tab }: { tab: Tab }) {
   if (tab.kind === 'diff') return <GitDiffView path={tab.path} />
   if (tab.kind === 'review') return <ReviewView path={tab.path} />
   if (tab.kind === 'browser') return <BrowserTab tabId={tab.path} />
+  if (tab.kind === 'settings') return <SettingsView />
   if (error)
     return (
       <div className="p-4 text-red-400">
@@ -131,7 +153,7 @@ function ActiveTab({ tab }: { tab: Tab }) {
   )
 }
 
-const CODE_KINDS: TabKind[] = ['file', 'diff', 'review', 'browser']
+const CODE_KINDS: TabKind[] = ['file', 'diff', 'review', 'browser', 'settings']
 
 function pickActiveTab(tabs: Tab[], activeId: string | null): Tab | undefined {
   if (!tabs.length) return undefined
@@ -155,9 +177,7 @@ export function EditorArea({ kinds = CODE_KINDS }: { kinds?: TabKind[] }) {
         <div className="text-center">
           <div className="text-lg text-fg">Lookingglass</div>
           <div className="mt-1">Open a file from the explorer.</div>
-          <div className="mt-4 font-mono text-[11px]">
-            ⌘O open folder · ⇧⌘F search · ⌃` terminal · ⇧⌘B browser
-          </div>
+          <ShortcutHints />
           <div className="mt-3">
             <NewBrowserTabButton labelled />
           </div>

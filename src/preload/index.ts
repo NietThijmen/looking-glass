@@ -92,6 +92,18 @@ const api: LookingglassApi = {
     onPicked: (listener) => subscribe('browser:picked', listener),
     onOpened: (listener) => subscribe('browser:opened', listener),
   },
+  settings: {
+    get: () => invoke('settings:get'),
+    set: (patch) => invoke('settings:set', patch),
+    readAgents: () => invoke('agents:readConfig'),
+    writeAgents: (agents) => invoke('agents:writeConfig', agents),
+    onChanged: (listener) => subscribe('settings:changed', listener),
+    onAgentsChanged: (listener) => subscribe('agents:changed', listener),
+  },
+  diagnostics: {
+    all: () => invoke('diagnostics:all'),
+    onChanged: (listener) => subscribe('diagnostics:changed', listener),
+  },
   review: {
     list: () => invoke('review:list'),
     base: (path) => invoke('review:base', path),
@@ -106,6 +118,8 @@ const api: LookingglassApi = {
     list: () => invoke('agent:list'),
     status: (agentId) => invoke('agent:status', agentId),
     newSession: (agentId) => invoke('agent:newSession', agentId),
+    listSessions: (agentId) => invoke('agent:listSessions', agentId),
+    loadSession: (agentId, sessionId) => invoke('agent:loadSession', agentId, sessionId),
     authenticate: (agentId, methodId) => invoke('agent:authenticate', agentId, methodId),
     prompt: (sessionId, prompt) => invoke('agent:prompt', sessionId, prompt),
     cancel: (sessionId) => invoke('agent:cancel', sessionId),
