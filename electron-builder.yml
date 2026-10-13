@@ -1,0 +1,25 @@
+appId: app.lookingglass.editor
+productName: Lookingglass
+directories:
+  output: release/${version}
+  buildResources: build
+files:
+  - out/**
+  - package.json
+asar: true
+# Executables can't run from inside app.asar: ripgrep's binary and node-pty's spawn-helper.
+asarUnpack:
+  - '**/node_modules/@vscode/ripgrep-*/**'
+  - '**/node_modules/node-pty/**'
+  # The Claude CLI binary that the Claude Code ACP adapter launches.
+  - '**/node_modules/@anthropic-ai/claude-agent-sdk-*/**'
+mac:
+  target: [dmg, zip]
+  category: public.app-category.developer-tools
+  # Signing and notarization land in Phase 6. Unsigned local builds for now.
+  identity: null
+win:
+  target: [nsis]
+linux:
+  target: [AppImage]
+  category: Development

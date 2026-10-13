@@ -1,0 +1,7 @@
+allowBuilds:
+  '@parcel/watcher': true
+  '@vscode/ripgrep': true
+  electron: true
+  electron-winstaller: false
+  esbuild: true
+  node-pty: true
