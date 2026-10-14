@@ -118,12 +118,8 @@ function Toolbar({ tabId }: { tabId: string }) {
 }
 
 function PickedBar({ tabId, items }: { tabId: string; items: Picked[] }) {
-  const [question, setQuestion] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
+  const draft = useRef('')
   const last = items.at(-1)
-  useEffect(() => inputRef.current?.focus(), [last])
-  if (!last) return null
-
   const api = window.lookingglass.browser
   const dismiss = (index?: number): void => {
     useBrowser.getState().unpick(tabId, index)
@@ -136,13 +132,50 @@ function PickedBar({ tabId, items }: { tabId: string; items: Picked[] }) {
       .slice(-MAX_PICK_ERRORS)
     return items.map((item, i) => pickedAttachment(item, activeCaps(), i === items.length - 1 ? errors : []))
   }
+  const subject = items.length > 1 ? 'these' : last?.kind === 'region' ? 'this region' : 'this element'
+
+  // The question box floats inside the page next to the pick: the page is a native
+  // view drawn above the window, so a renderer popover would be hidden behind it.
+  useEffect(() => {
+    if (!last) return
+    let stale = false
+    void api
+      .ask(tabId, {
+        rect: last.rect,
+        placeholder: `Ask about ${subject}…`,
+        canWalk: last.kind === 'element',
+        text: draft.current,
+      })
+      .then((result) => {
+        if (stale || !result) return
+        draft.current = result.text
+        if (result.type === 'walk') return walk(result.direction)
+        if (result.type === 'send' || result.type === 'newChat') {
+          void useAgents.getState().ask(result.text, attachments(), { newChat: result.type === 'newChat' })
+          draft.current = ''
+        } else if (result.type === 'add') {
+          // One at a time: the first may start a chat the rest should join.
+          const pending = attachments()
+          void (async () => {
+            for (const a of pending) await useAgents.getState().addPending(a)
+          })()
+        }
+        dismiss()
+      })
+    return () => {
+      stale = true
+      void api.hideAsk(tabId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [last])
+  if (!last) return null
+
   const source = last.kind === 'element' ? last.sources[0] : undefined
-  const subject = items.length > 1 ? 'these' : last.kind === 'region' ? 'this region' : 'this element'
   const walkButton = 'inline-flex items-center gap-0.5 text-muted hover:text-fg'
 
   return (
-    <div className="shrink-0 border-b border-border bg-panel px-2 py-1.5" data-testid="picked-bar">
-      <div className="mb-1 flex items-center gap-2 text-[11px]">
+    <div className="shrink-0 border-b border-border bg-panel px-2 py-1" data-testid="picked-bar">
+      <div className="flex items-center gap-2 text-[11px]">
         <div className="flex min-w-0 flex-wrap items-center gap-1">
           {items.map((item, i) => (
             <span
@@ -193,35 +226,6 @@ function PickedBar({ tabId, items }: { tabId: string; items: Picked[] }) {
           <Icon icon={X} className={iconSize.sm} />
         </button>
       </div>
-      <input
-        ref={inputRef}
-        data-testid="ask-element"
-        value={question}
-        placeholder={`Ask about ${subject}…  (Enter: send · ⌘Enter: new chat · Esc: add to chat · ↑↓: parent/child)`}
-        onChange={(e) => setQuestion(e.target.value)}
-        onKeyDown={(e) => {
-          // Plain arrows walk while the question is empty; ⌥ arrows walk any time.
-          const arrows = e.key === 'ArrowUp' || e.key === 'ArrowDown'
-          if (arrows && last.kind === 'element' && (e.altKey || !question)) {
-            e.preventDefault()
-            walk(e.key === 'ArrowUp' ? 'parent' : 'child')
-          } else if (e.key === 'Enter' && question.trim()) {
-            e.preventDefault()
-            void useAgents.getState().ask(question, attachments(), { newChat: e.metaKey || e.ctrlKey })
-            setQuestion('')
-            dismiss()
-          } else if (e.key === 'Escape') {
-            e.preventDefault()
-            // One at a time: the first may start a chat the rest should join.
-            const pending = attachments()
-            void (async () => {
-              for (const a of pending) await useAgents.getState().addPending(a)
-            })()
-            dismiss()
-          }
-        }}
-        className="h-7 w-full rounded border border-border bg-bg px-2 outline-none select-text focus:border-accent"
-      />
     </div>
   )
 }

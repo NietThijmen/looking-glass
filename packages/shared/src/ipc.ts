@@ -23,6 +23,8 @@ import type {
 import type { Diagnostic, DiagnosticsByPath } from './diagnostics'
 import type { CustomAgentConfig, UserSettings } from './settings'
 import type {
+  AskOptions,
+  AskResult,
   BrowserBounds,
   BrowserTabState,
   ConsoleEntry,
@@ -276,6 +278,9 @@ export interface InvokeContract {
   /** Replace the last picked element with its parent or first child. */
   'browser:walk': { args: [tabId: string, direction: 'parent' | 'child']; result: PickedElement | null }
   'browser:captureRegion': { args: [tabId: string]; result: PickedRegion | null }
+  /** Show the floating ask input by the last pick; resolves with the user's choice, null if hidden first. */
+  'browser:ask': { args: [tabId: string, options: AskOptions]; result: AskResult | null }
+  'browser:hideAsk': { args: [tabId: string]; result: void }
   /** Drop one picked item by index, or all of them. */
   'browser:unpick': { args: [tabId: string, index?: number]; result: void }
   'browser:screenshot': { args: [tabId: string]; result: string }
@@ -385,6 +390,8 @@ export interface LookingglassApi {
     setPicking(tabId: string, picking: boolean): Promise<void>
     walk(tabId: string, direction: 'parent' | 'child'): Promise<PickedElement | null>
     captureRegion(tabId: string): Promise<PickedRegion | null>
+    ask(tabId: string, options: AskOptions): Promise<AskResult | null>
+    hideAsk(tabId: string): Promise<void>
     unpick(tabId: string, index?: number): Promise<void>
     screenshot(tabId: string): Promise<string>
     previewUrl(): Promise<string | null>

@@ -64,6 +64,8 @@ export function registerBrowserHandlers(): void {
   handle('browser:setPicking', (_e, tabId, picking) => browser.setPicking(tabId, picking))
   handle('browser:walk', (_e, tabId, direction) => browser.walk(tabId, direction))
   handle('browser:captureRegion', (_e, tabId) => browser.captureRegion(tabId))
+  handle('browser:ask', (_e, tabId, options) => browser.ask(tabId, options))
+  handle('browser:hideAsk', (_e, tabId) => browser.hideAsk(tabId))
   handle('browser:unpick', (_e, tabId, index) => browser.unpick(tabId, index))
   handle('browser:screenshot', (_e, tabId) => browser.screenshot(tabId))
   handle('browser:previewUrl', () => (workspace.root ? previewUrl(workspace.root) : null))

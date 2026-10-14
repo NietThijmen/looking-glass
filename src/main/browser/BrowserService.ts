@@ -1,5 +1,8 @@
+import { askScript, ASK_CANCEL } from './askScript'
 import { BrowserWindow, session, WebContentsView, type Session } from 'electron'
 import type {
+  AskOptions,
+  AskResult,
   BrowserBounds,
   BrowserTabState,
   ConsoleEntry,
@@ -299,6 +302,29 @@ export class BrowserService {
       tab.capturing = false
       if (this.#tabs.has(tab.id)) this.#emitState(tab)
     }
+  }
+
+  /** Show the floating ask input next to the last pick. Resolves once the user chose something, or null when hidden. */
+  async ask(tabId: string, options: AskOptions): Promise<AskResult | null> {
+    const wc = this.#tab(tabId).view.webContents
+    wc.focus()
+    try {
+      return (await wc.executeJavaScriptInIsolatedWorld(
+        REGION_WORLD,
+        [{ code: askScript(options) }],
+        true,
+      )) as AskResult | null
+    } catch {
+      return null
+    }
+  }
+
+  hideAsk(tabId: string): void {
+    const tab = this.#tabs.get(tabId)
+    if (!tab || tab.view.webContents.isDestroyed()) return
+    void tab.view.webContents
+      .executeJavaScriptInIsolatedWorld(REGION_WORLD, [{ code: ASK_CANCEL }])
+      .catch(() => undefined)
   }
 
   /** Drop one picked item (by index), or the whole selection. */

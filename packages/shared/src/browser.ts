@@ -149,3 +149,18 @@ export function describePicked(item: Picked): string {
 export function describeRegion(r: PickedRegion): string {
   return `Screenshot of a region of ${r.pageUrl} (${r.pageTitle || 'untitled'}): ${r.rect.width}×${r.rect.height} at (${r.rect.x}, ${r.rect.y}) in a ${r.viewport.width}×${r.viewport.height} viewport.`
 }
+
+/** The floating "ask about this" input shown next to the last pick. */
+export interface AskOptions {
+  /** The picked box, in viewport coordinates. */
+  rect: { x: number; y: number; width: number; height: number }
+  placeholder: string
+  /** Whether ↑/↓ may walk to the parent or child element. */
+  canWalk: boolean
+  text: string
+}
+
+export type AskResult =
+  | { type: 'send' | 'newChat'; text: string }
+  | { type: 'add' | 'dismiss'; text: string }
+  | { type: 'walk'; direction: 'parent' | 'child'; text: string }
