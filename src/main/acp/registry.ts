@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDev, isSmokeTest } from '../env'
-import type { CustomAgentConfig } from '../../shared/settings'
+import type { CustomAgentConfig } from '@lookingglass/shared/settings'
 import type { AgentDefinition } from './definition'
 
 const require = createRequire(import.meta.url)

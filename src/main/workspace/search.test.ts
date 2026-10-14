@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SearchFileResult } from '../../shared/ipc'
+import type { SearchFileResult } from '@lookingglass/shared/ipc'
 import { buildRgArgs, collectRgLine } from './search'
 
 function match(path: string, line: number, text: string, submatches: Array<[number, number]>): string {

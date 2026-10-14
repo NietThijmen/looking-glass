@@ -1,4 +1,4 @@
-import type { PickedElement, SourceHint } from '../../shared/browser'
+import type { PickedElement, SourceHint } from '@lookingglass/shared/browser'
 import type { Cdp } from './cdp'
 
 const MAX_HTML = 4000

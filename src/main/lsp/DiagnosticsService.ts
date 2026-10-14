@@ -1,8 +1,8 @@
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import type { EditorSnapshot } from '../../shared/agent'
-import type { Diagnostic, DiagnosticSeverity, DiagnosticsByPath } from '../../shared/diagnostics'
+import type { EditorSnapshot } from '@lookingglass/shared/agent'
+import type { Diagnostic, DiagnosticSeverity, DiagnosticsByPath } from '@lookingglass/shared/diagnostics'
 import type { WorkspaceService } from '../workspace/WorkspaceService'
 import { LspClient, type LspProcessSpec } from './LspClient'
 

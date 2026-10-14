@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import type { DirEntry, FileReadResult, FileWriteResult, WorkspaceInfo } from '../../shared/ipc'
+import type { DirEntry, FileReadResult, FileWriteResult, WorkspaceInfo } from '@lookingglass/shared/ipc'
 import { resolveInside } from '../security/paths'
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024

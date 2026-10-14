@@ -7,7 +7,7 @@ import type {
   GitPushResult,
   GitStatus,
   GitStatusEntry,
-} from '../../shared/ipc'
+} from '@lookingglass/shared/ipc'
 
 const exec = promisify(execFile)
 const MAX_BUFFER = 64 * 1024 * 1024

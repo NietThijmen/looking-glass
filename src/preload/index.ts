@@ -7,10 +7,10 @@ import type {
   InvokeResult,
   LookingglassApi,
   Unsubscribe,
-} from '../shared/ipc'
+} from '@lookingglass/shared/ipc'
 
 // Sandboxed preload: only `electron` may be imported at runtime. Everything
-// else from ../shared must be type-only.
+// else from @lookingglass/shared must be type-only.
 
 function invoke<C extends InvokeChannel>(channel: C, ...args: InvokeArgs<C>): Promise<InvokeResult<C>> {
   return ipcRenderer.invoke(channel, ...args) as Promise<InvokeResult<C>>

@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { describePicked } from '../../shared/browser'
+import { describePicked } from '@lookingglass/shared/browser'
 import type { BrowserService } from './BrowserService'
 import type { Cdp } from './cdp'
 

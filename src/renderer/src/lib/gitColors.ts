@@ -1,4 +1,4 @@
-import type { GitFileStatus } from '../../../shared/ipc'
+import type { GitFileStatus } from '@lookingglass/shared/ipc'
 
 export const gitColor: Record<GitFileStatus, string> = {
   modified: 'text-amber-300',

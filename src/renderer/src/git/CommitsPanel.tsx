@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { GitLogEntry } from '../../../shared/ipc'
+import type { GitLogEntry } from '@lookingglass/shared/ipc'
 import { useWorkspace } from '../store/workspace'
 
 function formatWhen(iso: string): string {

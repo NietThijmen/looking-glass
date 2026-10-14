@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { Bot, Files, GitBranch, History, Search, Settings } from 'lucide-react'
-import type { MenuCommand } from '../../../shared/ipc'
+import type { MenuCommand } from '@lookingglass/shared/ipc'
 import { AgentsSidebar } from '../agent/AgentPanel'
 import { CommitsPanel } from '../git/CommitsPanel'
 import { Explorer } from '../explorer/Explorer'

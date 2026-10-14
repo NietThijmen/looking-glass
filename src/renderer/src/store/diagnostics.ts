@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Diagnostic, DiagnosticsByPath } from '../../../shared/diagnostics'
+import type { Diagnostic, DiagnosticsByPath } from '@lookingglass/shared/diagnostics'
 
 interface DiagnosticsStore {
   byPath: DiagnosticsByPath

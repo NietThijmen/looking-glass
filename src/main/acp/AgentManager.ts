@@ -9,7 +9,7 @@ import type {
   NewSessionResult,
   PromptResult,
   SessionHistory,
-} from '../../shared/agent'
+} from '@lookingglass/shared/agent'
 import type { EditorState } from '../editor/EditorState'
 import type { EditorMcpHandle } from '../mcp/editorMcpServer'
 import type { PermissionService } from '../permissions/PermissionService'

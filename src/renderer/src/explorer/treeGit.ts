@@ -1,5 +1,5 @@
 import type { GitStatusEntry as TreeGitEntry } from '@pierre/trees'
-import type { GitFileStatus, GitStatusEntry } from '../../../shared/ipc'
+import type { GitFileStatus, GitStatusEntry } from '@lookingglass/shared/ipc'
 
 const toTreeStatus: Record<GitFileStatus, TreeGitEntry['status']> = {
   modified: 'modified',

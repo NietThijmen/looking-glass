@@ -1,0 +1,14 @@
+{
+  "name": "@lookingglass/acp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@lookingglass/shared": "workspace:*",
+    "@agentclientprotocol/claude-agent-acp": "0.89.1",
+    "@agentclientprotocol/sdk": "1.8.0"
+  }
+}

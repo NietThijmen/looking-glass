@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import type { EventChannel, EventContract } from '../../shared/ipc'
+import type { EventChannel, EventContract } from '@lookingglass/shared/ipc'
 import { send } from './typed'
 
 /** Send an event to every app window. */

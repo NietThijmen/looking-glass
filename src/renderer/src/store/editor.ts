@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { FsChange } from '../../../shared/ipc'
+import type { FsChange } from '@lookingglass/shared/ipc'
 import { useAgents } from './agents'
 
 /**

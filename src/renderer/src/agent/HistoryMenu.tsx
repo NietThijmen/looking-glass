@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { SessionHistory } from '../../../shared/agent'
+import type { SessionHistory } from '@lookingglass/shared/agent'
 import { useAgents, type ChatPlacement } from '../store/agents'
 import { Chevron, Icon, Loader2, iconSize } from '../ui/icon'
 

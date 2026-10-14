@@ -3,7 +3,7 @@ import type {
   TerminalExitStatus,
   TerminalOutputResponse,
 } from '@agentclientprotocol/sdk'
-import type { TerminalInfo } from '../../shared/ipc'
+import type { TerminalInfo } from '@lookingglass/shared/ipc'
 import type { TerminalService } from './TerminalService'
 
 const DEFAULT_OUTPUT_LIMIT = 1024 * 1024

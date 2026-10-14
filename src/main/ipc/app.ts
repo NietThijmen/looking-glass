@@ -1,5 +1,5 @@
 import { app, BrowserWindow, shell } from 'electron'
-import type { AppInfo, WindowState } from '../../shared/ipc'
+import type { AppInfo, WindowState } from '@lookingglass/shared/ipc'
 import { handle } from './typed'
 
 export function getAppInfo(): AppInfo {

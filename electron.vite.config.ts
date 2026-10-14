@@ -14,6 +14,16 @@ const outDir = (mode: string, part: string): string | undefined =>
 export default defineConfig(({ mode }) => ({
   main: {
     build: {
+      // Bundle workspace packages. Their exports point at TypeScript source, which
+      // Node cannot load if electron-vite leaves the dependency external.
+      externalizeDeps: {
+        exclude: [
+          '@lookingglass/shared',
+          '@lookingglass/workspace',
+          '@lookingglass/review',
+          '@lookingglass/acp',
+        ],
+      },
       outDir: outDir(mode, 'main'),
       rollupOptions: {
         input: {

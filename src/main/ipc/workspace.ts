@@ -1,5 +1,5 @@
 import { BrowserWindow, clipboard, dialog } from 'electron'
-import type { FsChange, WorkspaceInfo } from '../../shared/ipc'
+import type { FsChange, WorkspaceInfo } from '@lookingglass/shared/ipc'
 import { isSmokeTest } from '../env'
 import { saveAppState } from '../state/appState'
 import { TerminalService } from '../terminal/TerminalService'

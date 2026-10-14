@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { ConsoleEntry, Picked } from '../../../shared/browser'
+import type { ConsoleEntry, Picked } from '@lookingglass/shared/browser'
 import { useAgents } from '../store/agents'
 import { useBrowser } from '../store/browser'
 import { useShortcut } from '../store/settings'

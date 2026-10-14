@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { BrowserTabState, ConsoleEntry, Picked, PickMode } from '../../../shared/browser'
+import type { BrowserTabState, ConsoleEntry, Picked, PickMode } from '@lookingglass/shared/browser'
 
 const MAX_CONSOLE = 500
 

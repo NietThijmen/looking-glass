@@ -1,4 +1,4 @@
-import type { ReviewEntry } from '../../shared/review'
+import type { ReviewEntry } from '@lookingglass/shared/review'
 import type { WorkspaceService } from '../workspace/WorkspaceService'
 import type { Checkpoints } from './Checkpoints'
 
