@@ -129,6 +129,8 @@ const api: LookingglassApi = {
     prompt: (sessionId, prompt) => invoke('agent:prompt', sessionId, prompt),
     cancel: (sessionId) => invoke('agent:cancel', sessionId),
     setMode: (sessionId, modeId) => invoke('agent:setMode', sessionId, modeId),
+    setConfigOption: (sessionId, configId, value) =>
+      invoke('agent:setConfigOption', sessionId, configId, value),
     respondPermission: (requestId, reply) => invoke('agent:respondPermission', requestId, reply),
     startTerminalAuth: (agentId, methodId) => invoke('agent:startTerminalAuth', agentId, methodId),
     onStatus: (listener) => subscribe('agent:status', listener),

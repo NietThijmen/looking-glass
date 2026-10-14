@@ -155,6 +155,9 @@ export function registerAgentHandlers(): void {
   handle('agent:prompt', (_e, sessionId, prompt) => agents.prompt(sessionId, prompt))
   handle('agent:cancel', (_e, sessionId) => agents.cancel(sessionId))
   handle('agent:setMode', (_e, sessionId, modeId) => agents.setMode(sessionId, modeId))
+  handle('agent:setConfigOption', (_e, sessionId, configId, value) =>
+    agents.setConfigOption(sessionId, configId, value),
+  )
   handle('agent:respondPermission', (_e, requestId, reply) => permissions.respond(requestId, reply))
   handle('review:list', () => review.entries())
   handle('review:base', (_e, path) => review.base(path) ?? null)

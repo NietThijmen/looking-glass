@@ -20,6 +20,7 @@ import type {
   SessionHistory,
   SessionUpdate,
 } from './agent'
+import type { SessionConfigOption } from '@agentclientprotocol/sdk'
 import type { Diagnostic, DiagnosticsByPath } from './diagnostics'
 import type { CustomAgentConfig, UserSettings } from './settings'
 import type {
@@ -245,6 +246,10 @@ export interface InvokeContract {
   'agent:prompt': { args: [sessionId: string, prompt: ContentBlock[]]; result: PromptResult }
   'agent:cancel': { args: [sessionId: string]; result: void }
   'agent:setMode': { args: [sessionId: string, modeId: string]; result: void }
+  'agent:setConfigOption': {
+    args: [sessionId: string, configId: string, value: string]
+    result: SessionConfigOption[]
+  }
   'agent:respondPermission': { args: [requestId: string, reply: PermissionReply]; result: void }
   'agent:startTerminalAuth': { args: [agentId: string, methodId: string]; result: TerminalInfo }
 
@@ -438,6 +443,7 @@ export interface LookingglassApi {
     prompt(sessionId: string, prompt: ContentBlock[]): Promise<PromptResult>
     cancel(sessionId: string): Promise<void>
     setMode(sessionId: string, modeId: string): Promise<void>
+    setConfigOption(sessionId: string, configId: string, value: string): Promise<SessionConfigOption[]>
     respondPermission(requestId: string, reply: PermissionReply): Promise<void>
     startTerminalAuth(agentId: string, methodId: string): Promise<TerminalInfo>
     onStatus(listener: Listener<'agent:status'>): Unsubscribe

@@ -1,4 +1,4 @@
-import type { SessionModeState } from '@agentclientprotocol/sdk'
+import type { SessionConfigOption, SessionModeState } from '@agentclientprotocol/sdk'
 import { create } from 'zustand'
 import type { PromptCapabilities } from '@agentclientprotocol/sdk'
 import type {
@@ -31,6 +31,7 @@ export interface Chat {
   items: TranscriptItem[]
   busy: boolean
   modes: SessionModeState | null
+  configOptions: SessionConfigOption[]
   promptCapabilities: PromptCapabilities
   /** The agent can `session/load` this chat's session. */
   canResume: boolean
@@ -105,6 +106,7 @@ interface AgentsStore {
   setMode(key: number, modeId: string): Promise<void>
   /** Switch an empty chat to another agent (a session is tied to its agent). Also the default for new chats. */
   setAgent(key: number, agentId: string): Promise<void>
+  setConfigOption(key: number, configId: string, value: string): Promise<void>
   respondPermission(requestId: string, optionId: string | null): void
 
   applyUpdate(sessionId: string, update: SessionUpdate): void
@@ -148,6 +150,7 @@ export const useAgents = create<AgentsStore>((set, get) => {
           sessionId: result.sessionId,
           resumeId: undefined,
           modes: result.modes ?? null,
+          configOptions: result.configOptions ?? [],
           promptCapabilities: result.promptCapabilities,
           canResume: result.canResume,
           items: resumeId ? [...c.items, notice('Resumed an earlier session.')] : c.items,
@@ -186,6 +189,7 @@ export const useAgents = create<AgentsStore>((set, get) => {
       items: [],
       busy: false,
       modes: null,
+      configOptions: [],
       promptCapabilities: {},
       canResume: false,
       ...extra,
@@ -326,11 +330,34 @@ export const useAgents = create<AgentsStore>((set, get) => {
       patch(key, (c) => ({ modes: c.modes ? { ...c.modes, currentModeId: modeId } : null }))
     },
 
+    async setConfigOption(key, configId, value) {
+      const chat = get().chats.find((c) => c.key === key)
+      if (!chat?.sessionId) return
+      try {
+        const configOptions = await window.lookingglass.agent.setConfigOption(chat.sessionId, configId, value)
+        patch(key, { configOptions })
+      } catch (error) {
+        patch(key, (c) => ({
+          items: [
+            ...c.items,
+            notice(`Couldn't change setting: ${error instanceof Error ? error.message : String(error)}`),
+          ],
+        }))
+      }
+    },
+
     async setAgent(key, agentId) {
       const chat = get().chats.find((c) => c.key === key)
       if (!chat || chat.busy || chat.items.length || chat.agentId === agentId) return
       set({ defaultAgentId: agentId })
-      patch(key, { agentId, sessionId: null, modes: null, canResume: false, promptCapabilities: {} })
+      patch(key, {
+        agentId,
+        sessionId: null,
+        modes: null,
+        configOptions: [],
+        canResume: false,
+        promptCapabilities: {},
+      })
       await startSession(key)
     },
 
@@ -343,6 +370,9 @@ export const useAgents = create<AgentsStore>((set, get) => {
       set((s) => ({
         chats: s.chats.map((c) => {
           if (c.sessionId !== sessionId) return c
+          if (update.sessionUpdate === 'config_option_update') {
+            return { ...c, configOptions: update.configOptions }
+          }
           if (update.sessionUpdate === 'current_mode_update') {
             return { ...c, modes: c.modes ? { ...c.modes, currentModeId: update.currentModeId } : null }
           }

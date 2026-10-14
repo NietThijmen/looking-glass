@@ -77,7 +77,13 @@ export class AgentManager {
     try {
       const response = await agent.client.newSession(root, await this.#mcpServers(agent.client))
       this.#sessions.set(response.sessionId, agentId)
-      return this.#sessionResult(agent.client, agentId, response.sessionId, response.modes)
+      return this.#sessionResult(
+        agent.client,
+        agentId,
+        response.sessionId,
+        response.modes,
+        response.configOptions,
+      )
     } catch (error) {
       return this.#authRequired(agent.client, agentId, error)
     }
@@ -119,7 +125,7 @@ export class AgentManager {
     this.#sessions.set(sessionId, agentId)
     try {
       const response = await agent.client.loadSession(sessionId, root, await this.#mcpServers(agent.client))
-      return this.#sessionResult(agent.client, agentId, sessionId, response.modes)
+      return this.#sessionResult(agent.client, agentId, sessionId, response.modes, response.configOptions)
     } catch (error) {
       this.#sessions.delete(sessionId)
       return this.#authRequired(agent.client, agentId, error)
@@ -172,6 +178,10 @@ export class AgentManager {
     await this.#clientFor(sessionId).cancel(sessionId)
   }
 
+  setConfigOption(sessionId: string, configId: string, value: string) {
+    return this.#clientFor(sessionId).setConfigOption(sessionId, configId, value)
+  }
+
   async setMode(sessionId: string, modeId: string): Promise<void> {
     await this.#clientFor(sessionId).setMode(sessionId, modeId)
   }
@@ -199,12 +209,14 @@ export class AgentManager {
     agentId: string,
     sessionId: string,
     modes: NewSessionResult['modes'] | undefined,
+    configOptions: NewSessionResult['configOptions'] | undefined,
   ): NewSessionResult {
     const caps = client.initializeResponse?.agentCapabilities
     return {
       sessionId,
       agentId,
       modes: modes ?? null,
+      configOptions: configOptions ?? null,
       promptCapabilities: caps?.promptCapabilities ?? {},
       canResume: caps?.loadSession === true,
     }

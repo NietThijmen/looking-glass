@@ -7,6 +7,7 @@ import type {
   ContentBlock,
   PermissionOption,
   PromptCapabilities,
+  SessionConfigOption,
   SessionModeState,
   SessionUpdate,
   StopReason,
@@ -32,6 +33,8 @@ export interface NewSessionResult {
   sessionId: string
   agentId: string
   modes?: SessionModeState | null
+  /** Session settings the agent exposes, such as the model (`category: "model"`). */
+  configOptions?: SessionConfigOption[] | null
   /** What the agent accepts in prompts beyond text (images, embedded file contents). */
   promptCapabilities: PromptCapabilities
   /** The agent supports `session/load`, so this session can be resumed later. */

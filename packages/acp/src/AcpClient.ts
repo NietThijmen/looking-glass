@@ -15,6 +15,7 @@ import {
   type ReadTextFileRequest,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
+  type SessionConfigOption,
   type SessionNotification,
   type TerminalExitStatus,
   type TerminalOutputResponse,
@@ -171,6 +172,15 @@ export class AcpClient {
 
   async setMode(sessionId: string, modeId: string): Promise<void> {
     await this.#agent().request(methods.agent.session.setMode, { sessionId, modeId })
+  }
+
+  async setConfigOption(sessionId: string, configId: string, value: string): Promise<SessionConfigOption[]> {
+    const response = await this.#agent().request(methods.agent.session.setConfigOption, {
+      sessionId,
+      configId,
+      value,
+    })
+    return response.configOptions
   }
 
   dispose(): void {

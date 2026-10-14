@@ -1,3 +1,4 @@
+import type { SessionConfigOption } from '@agentclientprotocol/sdk'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { basename } from '../lib/paths'
 import { useAgents, type Attachment, type AttachmentPart, type Chat } from '../store/agents'
@@ -92,10 +93,14 @@ export function Composer({ chat }: { chat: Chat }) {
   const activeFile = useEditor(
     (s) => s.tabs.find((t) => t.id === s.lastCodeId && t.kind === 'file')?.path ?? null,
   )
-  const { send, cancel, setMode, setAgent } = useAgents.getState()
+  const { send, cancel, setMode, setAgent, setConfigOption } = useAgents.getState()
   const agents = useAgents((s) => s.agents)
   const ref = useRef<HTMLTextAreaElement>(null)
   const ready = chat.state === 'ready'
+  const modelOption = chat.configOptions.find(
+    (o): o is Extract<SessionConfigOption, { type: 'select' }> =>
+      o.category === 'model' && o.type === 'select',
+  )
   const caps = chat.promptCapabilities
 
   useEffect(() => {
@@ -346,6 +351,24 @@ export function Composer({ chat }: { chat: Chat }) {
                 {m.name}
               </option>
             ))}
+          </select>
+        )}
+        {modelOption && (
+          <select
+            data-testid="model-select"
+            value={modelOption.currentValue}
+            disabled={chat.busy}
+            title={modelOption.description ?? modelOption.name}
+            onChange={(e) => void setConfigOption(chat.key, modelOption.id, e.target.value)}
+            className="max-w-40 rounded border border-border bg-bg px-1 py-0.5 text-[11px] text-muted outline-none disabled:opacity-60"
+          >
+            {modelOption.options
+              .flatMap((o) => ('group' in o ? o.options : [o]))
+              .map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.name}
+                </option>
+              ))}
           </select>
         )}
         <span className="ml-auto" />
