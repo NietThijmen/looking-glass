@@ -1,6 +1,6 @@
 {
   "name": "lookingglass",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "An AI-first code editor for ACP agents (Claude Code, Codex, …)",
   "main": "./out/main/index.js",
   "scripts": {
