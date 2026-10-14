@@ -36,6 +36,20 @@ Run your dev server, open it in the built-in browser, click the button that look
 
 Details: [Installation](docs/installation.md) · [Setup](docs/setup.md) · [Usage guide](docs/usage.md)
 
+## 🎬 See it in action
+
+**Pick an element and ask.** The agent gets the markup, styles, a screenshot and the source file.
+
+![Picking the "Get started" button and asking about it](docs/images/element-picker.png)
+
+**Review what the agent changed**, hunk by hunk, and keep or undo it.
+
+![The agent's CSS edit shown as a diff](docs/images/review-changes.png)
+
+**Check it at any size**, with device presets and a console that can feed straight into chat.
+
+![The page in the phone preset](docs/images/device-preset.png)
+
 ## 📚 Documentation
 
 | Guide                                | What's in it                                                             |

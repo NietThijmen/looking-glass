@@ -6,11 +6,17 @@ A tour of a typical session. Assumes you've [installed](installation.md) the app
 
 `⌘O` opens a folder. Start your dev server in the terminal (`` ⌃` ``). When something like `Local: http://localhost:5173` appears, Lookingglass offers to open it in a browser tab. You can also open one yourself with `⌘⇧B`, or set `previewUrl` in [project settings](setup.md#per-project-settings).
 
+![The built-in browser next to the explorer and a chat](images/browser-result.png)
+
 Browser tabs sit next to your code tabs. They have an address bar, DevTools and **device presets** (phone, tablet, desktop or a custom size).
+
+![The Phone 390×844 device preset](images/device-preset.png)
 
 ## 2. Point at something
 
 Press `⌘⇧C` to start the element picker.
+
+![Picking an element and asking about it](images/element-picker.png)
 
 - **Hover** to highlight elements, DevTools-style.
 - **Click** to pick one, **Shift+click** to pick several.
@@ -34,6 +40,8 @@ The chip shows exactly what will be sent: HTML, matched CSS rules, computed styl
 - Run several chats at once, each with its own agent. Switch agent modes (like plan mode) when the agent offers them, and resume earlier chats from history.
 - Paste or drop images straight into the message box.
 
+![A chat with the agent after it changed a file](images/agent-chat.png)
+
 ### @-mentions
 
 | Mention            | Adds                                    |
@@ -56,6 +64,8 @@ Agents can browse `localhost` and your preview URL freely. Navigating elsewhere 
 
 Agent edits are written to disk right away, so your dev server, HMR and tests see them. Meanwhile:
 
+![The review tab showing the agent's edit as a diff](images/review-changes.png)
+
 - A **changes bar** and a **review tab** list every changed file with **Keep** / **Undo** per hunk, or **Keep all** / **Undo all**.
 - A **checkpoint** is taken before every message. Hover a message and click **Restore** to roll all files back to that moment. It works in folders that aren't git repos and never touches your own `.git`.
 
@@ -66,6 +76,8 @@ Select code, press `⌘K`, describe the change. The result opens in review.
 ## 5. Console
 
 The console panel under the browser shows console output, uncaught exceptions and failed network requests. Send any entry to the chat, or mention `@browser-console`.
+
+![The console panel under the browser](images/browser-console.png)
 
 ## 6. Open in your own editor
 
@@ -87,6 +99,8 @@ You can work without an agent:
 - Git: status, diffs, a commits view, commit and push (`⌃⇧G`, `⌃⇧H`)
 - **Markdown preview**: on `.md`, `.markdown` and `.mdx` files, the **Preview** button in the tab toolbar shows the rendered document (GitHub-style, including alerts). It follows your unsaved edits, and **Source** switches back.
 - Integrated terminal. Commands the agent runs open as terminal tabs you can watch and kill.
+
+![A README rendered in the Markdown preview](images/markdown-preview.png)
 
 ## Tips
 
