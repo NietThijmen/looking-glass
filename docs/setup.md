@@ -54,6 +54,19 @@ The element picker finds the source file of an element through React, Vue and Sv
 <button data-lg-source="src/Hero.tsx:42:7">Get started</button>
 ```
 
+## Open in editor
+
+Lookingglass has a built-in editor, but you can send any file to your usual one with the **Open in editor** buttons. Choose the target in **Settings → Open in editor**. The default is VS Code.
+
+| Editor                                                                                | How it's launched                                                                           |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| VS Code, VS Code Insiders, Cursor, Windsurf                                           | Through the editor's URL scheme (`vscode://file/…`). Nothing to install besides the editor. |
+| IntelliJ IDEA, WebStorm, PhpStorm, PyCharm, GoLand, RubyMine, CLion, Rider, RustRover | Through the IDE's command-line launcher (`idea`, `webstorm`, …).                            |
+
+JetBrains IDEs need their launcher on your `PATH`: in the IDE use **Tools → Create Command-line Launcher**, or enable the shell scripts in Toolbox. On macOS Lookingglass also looks inside `/Applications` and `~/Applications` if the launcher isn't on `PATH`.
+
+If the editor can't be started, the button turns red and shows why. Only files inside the open folder can be opened this way.
+
 ## Keyboard shortcuts
 
 Change any of them in **Settings** (`⌘,`). On Windows and Linux, `⌘` is `Ctrl`.

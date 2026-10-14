@@ -67,7 +67,17 @@ Select code, press `⌘K`, describe the change. The result opens in review.
 
 The console panel under the browser shows console output, uncaught exceptions and failed network requests. Send any entry to the chat, or mention `@browser-console`.
 
-## 6. The editor around it
+## 6. Open in your own editor
+
+Prefer VS Code, Cursor or a JetBrains IDE for the actual typing? Click the **↗ Open in editor** button to jump to the file there, at the right line. You'll find it:
+
+- in the **editor tab toolbar**, which opens the current file at your selection (or the cursor line),
+- next to the **source location** of a picked element in the browser's picker bar, which opens the component that rendered it,
+- next to **file locations in agent tool calls** in the chat.
+
+Pick which editor it uses in **Settings → Open in editor** ([setup](setup.md#open-in-editor)).
+
+## 7. The editor around it
 
 You can work without an agent:
 

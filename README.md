@@ -24,6 +24,7 @@ Run your dev server, open it in the built-in browser, click the button that look
 - 🤖 **The agent checks its own work.** It can click, type, resize to a phone viewport, read the console and screenshot, so "fix it and verify" is one turn.
 - 🔑 **Bring your own agent.** No new account, no proxied keys. Claude Code works out of the box; Codex, Gemini CLI or any [ACP](https://agentclientprotocol.com) agent plug in with a few lines of JSON.
 - 🧐 **Review before you keep.** Keep or undo every hunk. Every message takes a checkpoint, so one click rolls everything back, even outside git.
+- ↗️ **Hand off to your own editor.** One click opens the file at the right line in VS Code, Cursor, Windsurf or a JetBrains IDE.
 - 🛠️ **A real editor around it.** File tree, search, git, diagnostics and a terminal. You can work without the agent too.
 
 ## 🚀 Quick start
