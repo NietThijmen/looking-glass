@@ -14,6 +14,14 @@ Releases may be unsigned if the maintainer had no signing certificates available
 
 ### macOS
 
+The quickest way is the install script. It downloads the latest release, copies it to `/Applications` and removes the quarantine flag:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NietThijmen/looking-glass/main/installer/mac.sh | bash
+```
+
+Set `INSTALL_DIR` to install somewhere else. The script is short, so [read it](../installer/mac.sh) before piping it to `bash`. It only downloads from this project's GitHub Releases. To install by hand instead, read on.
+
 Lookingglass is not signed or notarized with an Apple Developer ID, so macOS Gatekeeper blocks it the first time with a message like _"Lookingglass is damaged"_ or _"can't be opened because Apple cannot check it for malicious software"_. The app is fine. To open it anyway:
 
 1. Drag Lookingglass to **Applications** and try to open it once (it will be blocked).
