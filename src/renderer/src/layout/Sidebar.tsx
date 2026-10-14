@@ -72,7 +72,10 @@ export function Sidebar() {
   const width = useUi((s) => s.layout.sidebarWidth)
   const open = useUi((s) => s.layout.sidebarOpen)
   return (
-    <aside style={{ width }} className={`shrink-0 border-r border-border bg-panel ${open ? '' : 'hidden'}`}>
+    <aside
+      style={{ width }}
+      className={`shrink-0 overflow-hidden border-r border-border bg-panel ${open ? '' : 'hidden'}`}
+    >
       {/* Keep panels mounted so search state survives switching views and closing the sidebar. */}
       <div className={current === 'explorer' ? 'h-full' : 'hidden'}>
         <Explorer />

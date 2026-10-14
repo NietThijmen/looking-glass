@@ -101,8 +101,7 @@ export function Composer({ chat }: { chat: Chat }) {
   const activeFile = useEditor(
     (s) => s.tabs.find((t) => t.id === s.lastCodeId && t.kind === 'file')?.path ?? null,
   )
-  const { send, cancel, setMode, setAgent, setConfigOption } = useAgents.getState()
-  const agents = useAgents((s) => s.agents)
+  const { send, cancel, setMode, setConfigOption } = useAgents.getState()
   const ref = useRef<HTMLTextAreaElement>(null)
   const ready = chat.state === 'ready'
   const modelOption = chat.configOptions.find(
@@ -332,11 +331,7 @@ export function Composer({ chat }: { chat: Chat }) {
         data-testid="composer"
         value={text}
         disabled={!ready}
-        placeholder={
-          ready
-            ? 'Ask anything…  @ to mention files, selection, terminal, git diff, ci  ·  ! for prompts'
-            : 'Starting agent…'
-        }
+        placeholder={ready ? 'Ask anything…  @ mentions · ! prompts' : 'Starting agent…'}
         onChange={(e) => {
           setText(e.target.value)
           setCaret(e.target.selectionStart)
@@ -400,28 +395,12 @@ export function Composer({ chat }: { chat: Chat }) {
         className="w-full resize-none rounded border border-border bg-bg px-2 py-1.5 outline-none select-text focus:border-accent disabled:opacity-50"
       />
       {error && <div className="mt-1 text-[11px] text-amber-300">{error}</div>}
-      <div className="mt-1.5 flex items-center gap-2">
-        {agents.length > 1 && (
-          <select
-            data-testid="agent-select"
-            value={chat.agentId}
-            disabled={chat.busy || chat.items.length > 0}
-            title={chat.items.length ? 'An agent is fixed once a chat has started' : 'Agent'}
-            onChange={(e) => void setAgent(chat.key, e.target.value)}
-            className="rounded border border-border bg-bg px-1 py-0.5 text-[11px] text-muted outline-none disabled:opacity-60"
-          >
-            {agents.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label}
-              </option>
-            ))}
-          </select>
-        )}
+      <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
         {chat.modes && chat.modes.availableModes.length > 1 && (
           <select
             value={chat.modes.currentModeId}
             onChange={(e) => void setMode(chat.key, e.target.value)}
-            className="rounded border border-border bg-bg px-1 py-0.5 text-[11px] text-muted outline-none"
+            className="min-w-0 max-w-40 flex-1 truncate rounded border border-border bg-bg px-1 py-0.5 text-[11px] text-muted outline-none"
           >
             {chat.modes.availableModes.map((m) => (
               <option key={m.id} value={m.id}>
@@ -437,7 +416,7 @@ export function Composer({ chat }: { chat: Chat }) {
             disabled={chat.busy}
             title={modelOption.description ?? modelOption.name}
             onChange={(e) => void setConfigOption(chat.key, modelOption.id, e.target.value)}
-            className="max-w-40 rounded border border-border bg-bg px-1 py-0.5 text-[11px] text-muted outline-none disabled:opacity-60"
+            className="min-w-0 max-w-40 flex-1 truncate rounded border border-border bg-bg px-1 py-0.5 text-[11px] text-muted outline-none disabled:opacity-60"
           >
             {modelOption.options
               .flatMap((o) => ('group' in o ? o.options : [o]))
@@ -448,12 +427,12 @@ export function Composer({ chat }: { chat: Chat }) {
               ))}
           </select>
         )}
-        <span className="ml-auto" />
+        <span className="ml-auto shrink-0" />
         {chat.busy ? (
           <button
             data-testid="stop"
             onClick={() => void cancel(chat.key)}
-            className="rounded border border-border px-3 py-0.5 hover:bg-fg/5"
+            className="shrink-0 rounded border border-border px-3 py-0.5 hover:bg-fg/5"
           >
             Stop
           </button>
@@ -462,7 +441,7 @@ export function Composer({ chat }: { chat: Chat }) {
             data-testid="send"
             disabled={!ready || (!text.trim() && !attachments.length)}
             onClick={() => void submit()}
-            className="rounded bg-accent px-3 py-0.5 text-bg disabled:opacity-40"
+            className="shrink-0 rounded bg-accent px-3 py-0.5 text-bg disabled:opacity-40"
           >
             Send
           </button>
