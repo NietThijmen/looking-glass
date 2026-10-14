@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/social-preview.png" alt="Lookingglass: point at the bug, your agent fixes it" width="720">
+</p>
+
 <h1 align="center">🔭 Lookingglass</h1>
 
 <p align="center">
