@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GithubForge } from './github'
+import { actionArgs, GithubForge } from './github'
 import type { CommandRun } from './run'
 import type { PullRequestQuery } from './types'
 
@@ -23,6 +23,7 @@ const OPEN = {
   baseRefName: 'main',
   headRefName: 'button',
   state: 'OPEN',
+  isDraft: true,
   files: [{ path: 'src/button.tsx', additions: 2, deletions: 1 }],
   statusCheckRollup: [
     {
@@ -31,6 +32,17 @@ const OPEN = {
       status: 'COMPLETED',
       conclusion: 'FAILURE',
       detailsUrl: 'https://github.com/acme/app/actions/runs/1',
+    },
+  ],
+  comments: [{ author: { login: 'bob' }, body: 'Looks close.', createdAt: '2026-01-02T00:00:00Z' }],
+  reviews: [
+    { author: { login: 'cy' }, body: '', state: 'APPROVED', submittedAt: '2026-01-03T00:00:00Z' },
+    { author: { login: 'cy' }, body: '', state: 'COMMENTED', submittedAt: '2026-01-01T00:00:00Z' },
+    {
+      author: { login: 'dee' },
+      body: 'Rename it.',
+      state: 'CHANGES_REQUESTED',
+      submittedAt: '2026-01-01T00:00:00Z',
     },
   ],
 }
@@ -79,7 +91,7 @@ describe('GithubForge', () => {
       '--repo',
       'acme/app',
       '--json',
-      'number,title,body,url,author,baseRefName,headRefName,state,files,statusCheckRollup',
+      'number,title,body,url,author,baseRefName,headRefName,state,isDraft,files,statusCheckRollup,comments,reviews',
     ])
     expect(calls[1]).toEqual(['gh', 'pr', 'diff', '12', '--repo', 'acme/app'])
     expect(detail).toEqual({
@@ -91,6 +103,7 @@ describe('GithubForge', () => {
       author: 'ada',
       base: 'main',
       head: 'button',
+      isDraft: true,
       files: [
         {
           path: 'src/button.tsx',
@@ -108,7 +121,39 @@ describe('GithubForge', () => {
           url: 'https://github.com/acme/app/actions/runs/1',
         },
       ],
+      comments: [
+        { author: 'dee', body: 'Rename it.', createdAt: '2026-01-01T00:00:00Z', review: 'changes_requested' },
+        { author: 'bob', body: 'Looks close.', createdAt: '2026-01-02T00:00:00Z', review: null },
+        { author: 'cy', body: '', createdAt: '2026-01-03T00:00:00Z', review: 'approved' },
+      ],
     })
+  })
+
+  it('builds gh arguments for each action', () => {
+    expect(actionArgs(12, { kind: 'editBody', body: 'New body' })).toEqual([
+      'pr',
+      'edit',
+      '12',
+      '--body',
+      'New body',
+    ])
+    expect(actionArgs(12, { kind: 'comment', body: 'Hi' })).toEqual(['pr', 'comment', '12', '--body', 'Hi'])
+    expect(actionArgs(12, { kind: 'draft' })).toEqual(['pr', 'ready', '12', '--undo'])
+    expect(actionArgs(12, { kind: 'ready' })).toEqual(['pr', 'ready', '12'])
+    expect(actionArgs(12, { kind: 'merge', method: 'squash' })).toEqual(['pr', 'merge', '12', '--squash'])
+  })
+
+  it('reports a failed action with gh stderr', async () => {
+    const calls: string[][] = []
+    const run: CommandRun = async (command, args) => {
+      calls.push([command, ...args])
+      return { code: 1, stdout: '', stderr: 'not mergeable\n' }
+    }
+    expect(await GithubForge.act({ ...base, run }, 12, { kind: 'ready' })).toEqual({
+      ok: false,
+      error: 'not mergeable',
+    })
+    expect(calls[0]).toEqual(['gh', 'pr', 'ready', '12', '--repo', 'acme/app'])
   })
 
   it('returns null for a closed pull request', async () => {

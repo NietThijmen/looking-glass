@@ -3,7 +3,7 @@ import type { FsChange, WorkspaceInfo } from '@lookingglass/shared/ipc'
 import { isSmokeTest } from '../env'
 import { saveAppState } from '../state/appState'
 import { TerminalService } from '../terminal/TerminalService'
-import { forgeFor, parseRemote, runCommand } from '@lookingglass/forge'
+import { forgeFor, parseRemote, runCommand, type Forge, type PullRequestQuery } from '@lookingglass/forge'
 import {
   GitService,
   listFiles,
@@ -114,19 +114,30 @@ export function registerWorkspaceHandlers(): void {
   })
   // Separate from status so chat typing never waits on `gh`.
   handle('git:pullRequest', async () => {
-    const root = workspace.root
-    if (!root) return null
-    const upstream = await git.upstream(root)
-    if (!upstream) return null
-    const remote = parseRemote(upstream.url)
-    if (!remote) return null
-    const forge = forgeFor(remote)
-    if (!forge) return null
-    return forge.pullRequest({ cwd: root, remote, branch: upstream.branch, run: runCommand })
+    const target = await forgeTarget()
+    return target ? target.forge.pullRequest(target.query) : null
+  })
+  handle('git:pullRequestAction', async (_e, number, action) => {
+    const target = await forgeTarget()
+    if (!target) return { ok: false, error: 'No forge for this branch.' }
+    return target.forge.act(target.query, number, action)
   })
 
   handle('terminal:create', (_e, options) => terminals.create(workspace.root, options))
   handle('terminal:write', (_e, id, data) => terminals.write(id, data))
   handle('terminal:resize', (_e, id, cols, rows) => terminals.resize(id, cols, rows))
   handle('terminal:kill', (_e, id) => terminals.kill(id))
+}
+
+/** The forge and query for the current branch's upstream, or null when there is none. */
+async function forgeTarget(): Promise<{ forge: Forge; query: PullRequestQuery } | null> {
+  const root = workspace.root
+  if (!root) return null
+  const upstream = await git.upstream(root)
+  if (!upstream) return null
+  const remote = parseRemote(upstream.url)
+  if (!remote) return null
+  const forge = forgeFor(remote)
+  if (!forge) return null
+  return { forge, query: { cwd: root, remote, branch: upstream.branch, run: runCommand } }
 }

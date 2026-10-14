@@ -22,6 +22,16 @@ export interface PullRequestCheck {
   url: string
 }
 
+/** A conversation comment, or a review submitted with a body. */
+export interface PullRequestComment {
+  author: string
+  body: string
+  /** ISO timestamp; empty when the forge sent none. */
+  createdAt: string
+  /** Review verdict such as approved or changes_requested; null for a plain comment. */
+  review: string | null
+}
+
 export interface PullRequestDetail {
   forgeId: string
   number: number
@@ -31,8 +41,26 @@ export interface PullRequestDetail {
   author: string
   base: string
   head: string
+  isDraft: boolean
   files: PullRequestFile[]
   checks: PullRequestCheck[]
+  /** Oldest first. */
+  comments: PullRequestComment[]
+}
+
+export type PullRequestMergeMethod = 'merge' | 'squash' | 'rebase'
+
+/** A change the pull-request tab asks the forge to make. */
+export type PullRequestAction =
+  | { kind: 'editBody'; body: string }
+  | { kind: 'comment'; body: string }
+  | { kind: 'draft' }
+  | { kind: 'ready' }
+  | { kind: 'merge'; method: PullRequestMergeMethod }
+
+export interface PullRequestActionResult {
+  ok: boolean
+  error?: string
 }
 
 /** Word shown for a check: its conclusion, or pending when it has none yet. */

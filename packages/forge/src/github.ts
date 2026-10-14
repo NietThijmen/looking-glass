@@ -1,10 +1,17 @@
-import type { PullRequestCheck, PullRequestDetail, PullRequestFile } from '@lookingglass/shared/forge'
+import type {
+  PullRequestAction,
+  PullRequestCheck,
+  PullRequestComment,
+  PullRequestDetail,
+  PullRequestFile,
+} from '@lookingglass/shared/forge'
 import { splitDiff, type SplitPatch } from './diff'
 import type { Forge, PullRequestQuery } from './types'
 
 const GITHUB_ID = 'github'
 
-const VIEW_FIELDS = 'number,title,body,url,author,baseRefName,headRefName,state,files,statusCheckRollup'
+const VIEW_FIELDS =
+  'number,title,body,url,author,baseRefName,headRefName,state,isDraft,files,statusCheckRollup,comments,reviews'
 
 interface ListedFile {
   path: string
@@ -25,6 +32,33 @@ export const GithubForge: Forge = {
       return null
     }
   },
+  async act(query, number, action) {
+    const repo = `${query.remote.owner}/${query.remote.repo}`
+    try {
+      const result = await query.run('gh', [...actionArgs(number, action), '--repo', repo], query.cwd)
+      if (result.code === 0) return { ok: true }
+      return { ok: false, error: result.stderr.trim() || `gh exited with code ${result.code}` }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  },
+}
+
+/** `gh pr` arguments for one action, minus `--repo`. Bodies go as arguments; there is no shell. */
+export function actionArgs(number: number, action: PullRequestAction): string[] {
+  const pr = String(number)
+  switch (action.kind) {
+    case 'editBody':
+      return ['pr', 'edit', pr, '--body', action.body]
+    case 'comment':
+      return ['pr', 'comment', pr, '--body', action.body]
+    case 'draft':
+      return ['pr', 'ready', pr, '--undo']
+    case 'ready':
+      return ['pr', 'ready', pr]
+    case 'merge':
+      return ['pr', 'merge', pr, `--${action.method}`]
+  }
 }
 
 async function loadPullRequest(query: PullRequestQuery): Promise<PullRequestDetail | null> {
@@ -51,8 +85,10 @@ async function loadPullRequest(query: PullRequestQuery): Promise<PullRequestDeta
     author: authorLogin(json.author),
     base: asString(json.baseRefName),
     head: asString(json.headRefName),
+    isDraft: json.isDraft === true,
     files: buildFiles(asFiles(json.files), patches),
     checks: asChecks(json.statusCheckRollup),
+    comments: asComments(json.comments, json.reviews),
   }
 }
 
@@ -64,8 +100,11 @@ interface GhView {
   author: unknown
   baseRefName: unknown
   headRefName: unknown
+  isDraft: unknown
   files: unknown
   statusCheckRollup: unknown
+  comments: unknown
+  reviews: unknown
 }
 
 function parseView(stdout: string): GhView | null {
@@ -87,8 +126,11 @@ function parseView(stdout: string): GhView | null {
     author: json.author,
     baseRefName: json.baseRefName,
     headRefName: json.headRefName,
+    isDraft: json.isDraft,
     files: json.files,
     statusCheckRollup: json.statusCheckRollup,
+    comments: json.comments,
+    reviews: json.reviews,
   }
 }
 
@@ -198,6 +240,36 @@ function mapConclusion(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim().toLowerCase()
   return trimmed ? trimmed : null
+}
+
+/** Comments and reviews merged by time. A review with no body and no verdict worth showing is dropped. */
+function asComments(comments: unknown, reviews: unknown): PullRequestComment[] {
+  const merged: PullRequestComment[] = []
+  for (const item of Array.isArray(comments) ? comments : []) {
+    if (!item || typeof item !== 'object') continue
+    const raw = item as Record<string, unknown>
+    merged.push({
+      author: authorLogin(raw.author),
+      body: asString(raw.body),
+      createdAt: asString(raw.createdAt),
+      review: null,
+    })
+  }
+  for (const item of Array.isArray(reviews) ? reviews : []) {
+    if (!item || typeof item !== 'object') continue
+    const raw = item as Record<string, unknown>
+    const state = asString(raw.state).toLowerCase()
+    const body = asString(raw.body)
+    if (!body.trim() && (state === 'commented' || state === 'pending' || !state)) continue
+    merged.push({
+      author: authorLogin(raw.author),
+      body,
+      createdAt: asString(raw.submittedAt),
+      review: state || null,
+    })
+  }
+  // ISO timestamps sort as strings; the sort is stable so undated entries keep their order.
+  return merged.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
 }
 
 function authorLogin(author: unknown): string {
