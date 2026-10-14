@@ -85,6 +85,7 @@ You can work without an agent:
 - Project search (`⌘⇧F`, powered by ripgrep)
 - TypeScript diagnostics
 - Git: status, diffs, a commits view, commit and push (`⌃⇧G`, `⌃⇧H`)
+- **Markdown preview**: on `.md`, `.markdown` and `.mdx` files, the **Preview** button in the tab toolbar shows the rendered document (GitHub-style, including alerts). It follows your unsaved edits, and **Source** switches back.
 - Integrated terminal. Commands the agent runs open as terminal tabs you can watch and kill.
 
 ## Tips

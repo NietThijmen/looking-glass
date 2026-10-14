@@ -1,5 +1,6 @@
 import { Bot } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { Markdown } from '../agent/Markdown'
 import { AgentTab, StartChat, useChatLabel } from '../agent/AgentPanel'
 import { HistoryMenu } from '../agent/HistoryMenu'
 import { basename } from '../lib/paths'
@@ -12,9 +13,12 @@ import { ReviewView } from '../review/ReviewView'
 import { useBrowser } from '../store/browser'
 import { useReview } from '../store/review'
 import { SettingsView } from '../settings/SettingsView'
+import { isMarkdownPath, useMarkdownPreview } from '../store/markdownPreview'
 import { useShortcut } from '../store/settings'
 import {
+  Code,
   Diff,
+  Eye,
   GitPullRequest,
   Globe,
   History,
@@ -239,6 +243,7 @@ function ActiveTab({ tab }: { tab: Tab }) {
   const error = useEditor((s) => s.errors[tab.path])
   const { reloadFromDisk } = useEditor.getState()
   const underReview = useReview((s) => s.entries.some((e) => e.path === tab.path))
+  const previewing = useMarkdownPreview((s) => !!s.previewing[tab.path])
 
   if (tab.kind === 'diff') return <GitDiffView path={tab.path} />
   if (tab.kind === 'review') return <ReviewView path={tab.path} />
@@ -283,16 +288,39 @@ function ActiveTab({ tab }: { tab: Tab }) {
           </button>
         </div>
       )}
-      <div className="flex shrink-0 items-center justify-end gap-2 border-b border-border px-3 py-0.5 text-[11px]">
+      <div className="flex shrink-0 items-center justify-end gap-3 border-b border-border px-3 py-0.5 text-[11px]">
+        {isMarkdownPath(tab.path) && (
+          <button
+            data-testid="markdown-preview-toggle"
+            title={previewing ? 'Show source' : 'Show rendered markdown'}
+            className="inline-flex items-center gap-1 text-muted hover:text-fg"
+            onClick={() => useMarkdownPreview.getState().toggle(tab.path)}
+          >
+            <Icon icon={previewing ? Code : Eye} className={iconSize.xs} />
+            {previewing ? 'Source' : 'Preview'}
+          </button>
+        )}
         <OpenInEditorButton
           path={tab.path}
           line={() => selectionOrLine(tab.path)?.startLine}
           label="Open in editor"
         />
       </div>
-      <div className="min-h-0 flex-1" data-testid="code-editor" data-path={tab.path}>
+      {/* The editor stays mounted behind the preview so unsaved edits and the cursor survive. */}
+      <div
+        className={previewing ? 'hidden' : 'min-h-0 flex-1'}
+        data-testid="code-editor"
+        data-path={tab.path}
+      >
         <CodeEditor path={tab.path} buffer={buffer} />
       </div>
+      {previewing && (
+        <div data-testid="markdown-preview" className="min-h-0 flex-1 overflow-auto p-6 select-text">
+          <div className="mx-auto max-w-3xl">
+            <Markdown source={buffer.draft} flavor="github" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
