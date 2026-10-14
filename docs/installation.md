@@ -12,6 +12,16 @@ Grab the latest build from [GitHub Releases](https://github.com/NietThijmen/look
 
 Releases may be unsigned if the maintainer had no signing certificates available. On Windows, choose **More info → Run anyway** in SmartScreen. On macOS, see below.
 
+### Linux
+
+The install script downloads the latest AppImage (x86_64 only), puts a `lookingglass` command in `~/.local/bin` and adds an application menu entry:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NietThijmen/looking-glass/main/installer/linux.sh | bash
+```
+
+Set `INSTALL_DIR` or `BIN_DIR` to install elsewhere. As with the macOS script, [read it](../installer/linux.sh) before piping it to `bash`. AppImages need `libfuse2` (on Debian and Ubuntu: `sudo apt install libfuse2`).
+
 ### macOS
 
 The quickest way is the install script. It downloads the latest release, copies it to `/Applications` and removes the quarantine flag:
