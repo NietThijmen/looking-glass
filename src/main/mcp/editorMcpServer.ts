@@ -34,9 +34,10 @@ const text = (value: unknown) => ({
 })
 
 const PREAMBLE =
-  'You are running inside Lookingglass, a code editor with a built-in browser. This server (`lookingglass`) gives you tools for what the user has open in it:'
+  'You are running inside Lookingglass, a code editor with a built-in browser. This server (`lookingglass`) gives you tools for what the user has open in it. They are your first choice for anything in the editor or its browser:'
 
 const POSTAMBLE = [
+  'Prefer these tools over any other tool that does the same job. Use the `lookingglass` browser tools, not a separate browser, Playwright, or fetching the page with curl or a web tool. Use `open_file` to show code to the user, and `get_git_status` and `get_diagnostics` before running git or a type checker in a shell. Fall back to other tools only when these cannot do it.',
   'When a question is about a page the user has open, inspect the live page with the browser tools instead of guessing. A prompt may already include an element the user picked in the browser (selector, HTML, matched CSS, screenshot) as context.',
   'Some of these tools may be deferred in your client. Load their schemas first (for example with a tool search) before calling them.',
 ].join('\n')
