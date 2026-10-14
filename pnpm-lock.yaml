@@ -213,6 +213,9 @@ importers:
       '@agentclientprotocol/sdk':
         specifier: 1.8.0
         version: 1.8.0(zod@4.6.6)
+      '@lookingglass/review':
+        specifier: workspace:*
+        version: link:packages/review
       '@lookingglass/shared':
         specifier: workspace:*
         version: link:packages/shared

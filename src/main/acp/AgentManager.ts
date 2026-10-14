@@ -13,7 +13,7 @@ import type {
 import type { EditorState, WorkspaceService } from '@lookingglass/workspace'
 import type { EditorMcpHandle } from '../mcp/editorMcpServer'
 import type { PermissionService } from '../permissions/PermissionService'
-import type { ReviewService } from '../review/ReviewService'
+import type { ReviewService } from '@lookingglass/review'
 import type { AgentTerminals } from '../terminal/AgentTerminals'
 import { AcpClient } from './AcpClient'
 import { summarize, type AgentDefinition } from './definition'

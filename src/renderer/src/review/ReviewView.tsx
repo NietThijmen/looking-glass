@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { baseOptions } from '../editor/diffsConfig'
 import { useReview } from '../store/review'
 import { Check, Icon, X, iconSize } from '../ui/icon'
-import { acceptBlock, changeBlocks, rejectBlock, segments } from './hunks'
+import { acceptBlock, changeBlocks, rejectBlock, segments } from '@lookingglass/review/hunks'
 
 const diffOptions = { ...baseOptions, diffStyle: 'unified' } as const
 

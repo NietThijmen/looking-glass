@@ -61,6 +61,7 @@
   },
   "private": true,
   "dependencies": {
+    "@lookingglass/review": "workspace:*",
     "@lookingglass/shared": "workspace:*",
     "@lookingglass/workspace": "workspace:*",
     "@agentclientprotocol/claude-agent-acp": "0.89.1",

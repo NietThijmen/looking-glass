@@ -12,5 +12,6 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
+  "exclude": ["src/hunks.ts", "src/hunks.test.ts"],
   "references": [{ "path": "../shared" }, { "path": "../workspace" }]
 }
