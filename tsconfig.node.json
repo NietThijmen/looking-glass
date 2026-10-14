@@ -16,6 +16,7 @@
     { "path": "./packages/workspace" },
     { "path": "./packages/review" },
     { "path": "./packages/review/tsconfig.hunks.json" },
-    { "path": "./packages/acp" }
+    { "path": "./packages/acp" },
+    { "path": "./packages/forge" }
   ]
 }

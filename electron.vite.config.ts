@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => ({
           '@lookingglass/workspace',
           '@lookingglass/review',
           '@lookingglass/acp',
+          '@lookingglass/forge',
         ],
       },
       outDir: outDir(mode, 'main'),

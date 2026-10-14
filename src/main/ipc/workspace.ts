@@ -3,6 +3,7 @@ import type { FsChange, WorkspaceInfo } from '@lookingglass/shared/ipc'
 import { isSmokeTest } from '../env'
 import { saveAppState } from '../state/appState'
 import { TerminalService } from '../terminal/TerminalService'
+import { forgeFor, parseRemote, runCommand } from '@lookingglass/forge'
 import {
   GitService,
   listFiles,
@@ -110,6 +111,18 @@ export function registerWorkspaceHandlers(): void {
     const result = await git.push(requireRoot())
     if (result.ok) broadcast('git:changed', null)
     return result
+  })
+  // Separate from status so chat typing never waits on `gh`.
+  handle('git:pullRequest', async () => {
+    const root = workspace.root
+    if (!root) return null
+    const upstream = await git.upstream(root)
+    if (!upstream) return null
+    const remote = parseRemote(upstream.url)
+    if (!remote) return null
+    const forge = forgeFor(remote)
+    if (!forge) return null
+    return forge.pullRequest({ cwd: root, remote, branch: upstream.branch, run: runCommand })
   })
 
   handle('terminal:create', (_e, options) => terminals.create(workspace.root, options))

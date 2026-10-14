@@ -216,6 +216,9 @@ importers:
       '@lookingglass/acp':
         specifier: workspace:*
         version: link:packages/acp
+      '@lookingglass/forge':
+        specifier: workspace:*
+        version: link:packages/forge
       '@lookingglass/review':
         specifier: workspace:*
         version: link:packages/review
@@ -340,6 +343,12 @@ importers:
       '@agentclientprotocol/sdk':
         specifier: 1.8.0
         version: 1.8.0(zod@4.6.6)
+      '@lookingglass/shared':
+        specifier: workspace:*
+        version: link:../shared
+
+  packages/forge:
+    dependencies:
       '@lookingglass/shared':
         specifier: workspace:*
         version: link:../shared

@@ -4,9 +4,10 @@ import { useAgents } from './agents'
 
 /**
  * file = editor, diff = against git HEAD, review = agent changes against their review baseline,
+ * pull-request = the open pull request for the current branch (one tab),
  * settings = the one settings tab, agent = a chat (its `path` is `chat:<key>`).
  */
-export type TabKind = 'file' | 'diff' | 'review' | 'browser' | 'settings' | 'agent'
+export type TabKind = 'file' | 'diff' | 'review' | 'pull-request' | 'browser' | 'settings' | 'agent'
 
 /** Tabs that show a workspace file. */
 const CODE_KINDS: TabKind[] = ['file', 'diff', 'review']
@@ -54,6 +55,8 @@ interface EditorStore {
   openFile(path: string, reveal?: { line: number; column: number }): Promise<void>
   openDiff(path: string): Promise<void>
   openReview(path: string): void
+  /** One pull-request tab. Opening it again focuses that same tab. */
+  openPullRequest(): void
   openSettings(): void
   /** Browser tabs use their browser tab id as `path`. */
   openBrowser(url: string): Promise<void>
@@ -140,6 +143,10 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     openReview(path) {
       openTab('review', path)
+    },
+
+    openPullRequest() {
+      openTab('pull-request', 'pull-request')
     },
 
     openSettings() {

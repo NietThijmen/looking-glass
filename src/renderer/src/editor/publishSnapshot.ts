@@ -5,7 +5,7 @@ const DEBOUNCE_MS = 150
 
 function snapshot(): EditorSnapshot {
   const { lastCodeId, buffers } = useEditor.getState()
-  // Browser, settings and chat tabs aren't files.
+  // Browser, settings, chat, and pull-request tabs aren't files.
   const tabs = useEditor
     .getState()
     .tabs.filter((t) => t.kind === 'file' || t.kind === 'diff' || t.kind === 'review')

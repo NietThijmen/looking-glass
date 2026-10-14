@@ -3,6 +3,7 @@ import { selectionIn } from '../editor/selection'
 import { basename } from '../lib/paths'
 import type { Attachment } from '../store/agents'
 import { formatDiagnostics } from '@lookingglass/shared/diagnostics'
+import { formatCi } from '@lookingglass/shared/forge'
 import { consoleAttachment } from '../browser/elementAttachment'
 import { useDiagnostics } from '../store/diagnostics'
 import { useBrowser } from '../store/browser'
@@ -20,6 +21,7 @@ export type MentionOption =
   | { kind: 'browser' }
   | { kind: 'browser-console' }
   | { kind: 'problems' }
+  | { kind: 'ci' }
 
 const MAX_OPTIONS = 12
 const TERMINAL_CHARS = 8000
@@ -41,6 +43,12 @@ export function optionLabel(option: MentionOption): string {
       return 'browser-console'
     case 'problems':
       return 'problems'
+    case 'ci':
+      return 'ci'
+    default: {
+      const _exhaustive: never = option
+      return _exhaustive
+    }
   }
 }
 
@@ -73,6 +81,7 @@ export function mentionOptions(query: string, files: string[]): MentionOption[] 
     { kind: 'browser' },
     { kind: 'browser-console' },
     { kind: 'problems' },
+    { kind: 'ci' },
   ]
   const folders = new Set<string>()
   for (const file of files) {
@@ -197,6 +206,15 @@ export async function resolveMention(
         label: 'git diff',
         blocks: [{ type: 'text', text: `Uncommitted changes (git diff HEAD):\n\`\`\`diff\n${diff}\n\`\`\`` }],
       }
+    }
+    case 'ci': {
+      const pr = await window.lookingglass.git.pullRequest().catch(() => null)
+      if (!pr) return { error: 'No pull request for this branch.' }
+      return { label: 'ci', blocks: [{ type: 'text', text: formatCi(pr) }] }
+    }
+    default: {
+      const _exhaustive: never = option
+      return _exhaustive
     }
   }
 }

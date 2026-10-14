@@ -13,6 +13,7 @@ import {
   iconSize,
   mentionOptionIcon,
 } from '../ui/icon'
+import { ComposerHints } from '../git/ComposerHints'
 import { imageAttachment, mentionOptions, optionLabel, resolveMention, type MentionOption } from './mentions'
 
 /** `@query` right before the caret, if the user is typing a mention. */
@@ -262,13 +263,14 @@ export function Composer({ chat }: { chat: Chat }) {
         />
       )}
 
+      <ComposerHints />
       <textarea
         ref={ref}
         data-testid="composer"
         value={text}
         disabled={!ready}
         placeholder={
-          ready ? 'Ask anything…  @ to mention files, selection, terminal, git diff' : 'Starting agent…'
+          ready ? 'Ask anything…  @ to mention files, selection, terminal, git diff, ci' : 'Starting agent…'
         }
         onChange={(e) => {
           setText(e.target.value)

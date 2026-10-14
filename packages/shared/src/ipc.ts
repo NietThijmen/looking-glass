@@ -31,7 +31,10 @@ import type {
   PickedRegion,
   PickMode,
 } from './browser'
+import type { PullRequestDetail } from './forge'
 import type { ReviewEntry } from './review'
+
+export type { PullRequestCheck, PullRequestDetail, PullRequestFile, PullRequestFileStatus } from './forge'
 
 export interface AppInfo {
   name: string
@@ -198,6 +201,8 @@ export interface InvokeContract {
   'git:log': { args: [limit?: number]; result: GitLogEntry[] }
   'git:commit': { args: [message: string]; result: GitCommitResult }
   'git:push': { args: []; result: GitPushResult }
+  /** Open pull request for the current branch, or null when there isn't one. */
+  'git:pullRequest': { args: []; result: PullRequestDetail | null }
 
   'terminal:create': { args: [options: TerminalCreateOptions]; result: TerminalInfo }
   'terminal:write': { args: [id: string, data: string]; result: void }
@@ -344,6 +349,8 @@ export interface LookingglassApi {
     log(limit?: number): Promise<GitLogEntry[]>
     commit(message: string): Promise<GitCommitResult>
     push(): Promise<GitPushResult>
+    /** Open pull request for the current branch, or null. A missing `gh` login is null. */
+    pullRequest(): Promise<PullRequestDetail | null>
     onChanged(listener: Listener<'git:changed'>): Unsubscribe
   }
   editor: {

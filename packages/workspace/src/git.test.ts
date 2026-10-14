@@ -99,4 +99,25 @@ describe('GitService', () => {
     tmp = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'lg-nogit-')))
     expect(await new GitService().status(tmp)).toBeNull()
   })
+
+  it('reads the upstream remote and falls back to origin', async () => {
+    tmp = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'lg-git-')))
+    const run = (...args: string[]): void => {
+      execFileSync('git', args, { cwd: tmp, stdio: 'ignore' })
+    }
+    run('init', '-q', '-b', 'main')
+    run('config', 'user.email', 'test@example.com')
+    run('config', 'user.name', 'Test')
+    await fs.writeFile(path.join(tmp, 'a.txt'), 'a\n')
+    run('add', '.')
+    run('commit', '-q', '-m', 'init')
+
+    const git = new GitService()
+    expect(await git.upstream(tmp)).toBeNull()
+    run('remote', 'add', 'origin', 'https://example.com/owner/repo.git')
+    expect(await git.upstream(tmp)).toEqual({ branch: 'main', url: 'https://example.com/owner/repo.git' })
+    run('remote', 'add', 'upstream', 'git@gitlab.com:group/project.git')
+    run('config', 'branch.main.remote', 'upstream')
+    expect(await git.upstream(tmp)).toEqual({ branch: 'main', url: 'git@gitlab.com:group/project.git' })
+  })
 })

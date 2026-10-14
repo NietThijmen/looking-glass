@@ -190,4 +190,28 @@ export class GitService {
       return { ok: false, error: gitError(error) || 'Push failed' }
     }
   }
+
+  /**
+   * Current branch and the URL of its upstream remote.
+   * When the branch has no upstream, falls back to `origin`. Null outside a repo,
+   * on a detached HEAD, or when that remote has no URL.
+   */
+  async upstream(root: string): Promise<{ branch: string; url: string } | null> {
+    try {
+      const branch = (await git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
+      if (!branch || branch === 'HEAD') return null
+      let remote = 'origin'
+      try {
+        const configured = (await git(root, ['config', '--get', `branch.${branch}.remote`])).trim()
+        if (configured) remote = configured
+      } catch {
+        // No upstream remote configured; origin is the fallback.
+      }
+      const url = (await git(root, ['remote', 'get-url', remote])).trim()
+      if (!url) return null
+      return { branch, url }
+    } catch {
+      return null
+    }
+  }
 }
