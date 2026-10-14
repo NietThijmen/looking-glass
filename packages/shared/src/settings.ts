@@ -1,3 +1,4 @@
+import { DEFAULT_EXTERNAL_EDITOR, type ExternalEditorId } from './editors'
 import type { MenuCommand } from './ipc'
 
 export type ThemeSetting = 'dark' | 'light' | 'system'
@@ -5,11 +6,17 @@ export type ThemeSetting = 'dark' | 'light' | 'system'
 /** App-wide preferences, stored in the app's userData folder. */
 export interface UserSettings {
   theme: ThemeSetting
+  /** Where "Open in editor" sends files. */
+  externalEditor: ExternalEditorId
   /** Electron accelerators that replace the defaults below; an empty string removes the shortcut. */
   keybindings: Partial<Record<MenuCommand, string>>
 }
 
-export const DEFAULT_SETTINGS: UserSettings = { theme: 'dark', keybindings: {} }
+export const DEFAULT_SETTINGS: UserSettings = {
+  theme: 'dark',
+  externalEditor: DEFAULT_EXTERNAL_EDITOR,
+  keybindings: {},
+}
 
 export interface CommandInfo {
   command: MenuCommand

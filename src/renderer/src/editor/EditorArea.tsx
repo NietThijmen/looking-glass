@@ -27,6 +27,8 @@ import {
   iconSize,
 } from '../ui/icon'
 import { GitDiffView } from './GitDiffView'
+import { OpenInEditorButton } from './OpenInEditorButton'
+import { selectionOrLine } from './selection'
 import { PullRequestView } from './PullRequestView'
 
 function TabLabel({ tab }: { tab: Tab }) {
@@ -281,6 +283,13 @@ function ActiveTab({ tab }: { tab: Tab }) {
           </button>
         </div>
       )}
+      <div className="flex shrink-0 items-center justify-end gap-2 border-b border-border px-3 py-0.5 text-[11px]">
+        <OpenInEditorButton
+          path={tab.path}
+          line={() => selectionOrLine(tab.path)?.startLine}
+          label="Open in editor"
+        />
+      </div>
       <div className="min-h-0 flex-1" data-testid="code-editor" data-path={tab.path}>
         <CodeEditor path={tab.path} buffer={buffer} />
       </div>

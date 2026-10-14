@@ -8,6 +8,7 @@ import {
   type CustomAgentConfig,
   type ThemeSetting,
 } from '@lookingglass/shared/settings'
+import { EXTERNAL_EDITORS, type ExternalEditorId } from '@lookingglass/shared/editors'
 import { useAgents } from '../store/agents'
 import { useSettings } from '../store/settings'
 import { Icon, Plus, X, iconSize } from '../ui/icon'
@@ -50,6 +51,32 @@ function ThemeSection() {
           </button>
         ))}
       </div>
+    </Section>
+  )
+}
+
+function ExternalEditorSection() {
+  const current = useSettings((s) => s.settings.externalEditor)
+  return (
+    <Section title="Open in editor">
+      <p className="mb-2 text-muted">
+        Where the “Open in editor” buttons send files. JetBrains IDEs need their command-line launcher (Tools
+        → Create Command-line Launcher, or Toolbox's shell scripts).
+      </p>
+      <select
+        data-testid="external-editor"
+        value={current}
+        onChange={(e) =>
+          void useSettings.getState().set({ externalEditor: e.target.value as ExternalEditorId })
+        }
+        className="rounded border border-border bg-panel px-2 py-1 text-fg"
+      >
+        {EXTERNAL_EDITORS.map((e) => (
+          <option key={e.id} value={e.id}>
+            {e.label}
+          </option>
+        ))}
+      </select>
     </Section>
   )
 }
@@ -308,6 +335,7 @@ export function SettingsView() {
       <div className="mx-auto max-w-3xl p-6">
         <h1 className="mb-6 text-lg text-fg">Settings</h1>
         <ThemeSection />
+        <ExternalEditorSection />
         <KeybindingsSection />
         <AgentsSection />
       </div>

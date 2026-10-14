@@ -2,6 +2,7 @@ import { MultiFileDiff } from '@pierre/diffs/react'
 import type { ToolCallContent } from '@agentclientprotocol/sdk'
 import { memo, useState } from 'react'
 import { baseOptions } from '../editor/diffsConfig'
+import { OpenInEditorButton } from '../editor/OpenInEditorButton'
 import { useEditor } from '../store/editor'
 import { useUi } from '../store/ui'
 import { useWorkspace } from '../store/workspace'
@@ -37,12 +38,15 @@ function Location({ path, line }: { path: string; line?: number | null }) {
   const label = `${rel ?? path}${line ? `:${line}` : ''}`
   if (!rel) return <span className="font-mono text-[11px] text-muted">{label}</span>
   return (
-    <button
-      className="font-mono text-[11px] text-accent hover:underline"
-      onClick={() => void useEditor.getState().openFile(rel, line ? { line, column: 0 } : undefined)}
-    >
-      {label}
-    </button>
+    <span className="inline-flex items-center gap-1.5">
+      <button
+        className="font-mono text-[11px] text-accent hover:underline"
+        onClick={() => void useEditor.getState().openFile(rel, line ? { line, column: 0 } : undefined)}
+      >
+        {label}
+      </button>
+      <OpenInEditorButton path={rel} line={line ?? undefined} />
+    </span>
   )
 }
 

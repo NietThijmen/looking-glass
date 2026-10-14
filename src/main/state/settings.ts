@@ -1,6 +1,7 @@
 import { app, nativeTheme } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { isExternalEditorId } from '@lookingglass/shared/editors'
 import type { MenuCommand } from '@lookingglass/shared/ipc'
 import {
   COMMANDS,
@@ -28,6 +29,9 @@ export function sanitizeSettings(raw: unknown): UserSettings {
     theme: THEMES.includes(value.theme as ThemeSetting)
       ? (value.theme as ThemeSetting)
       : DEFAULT_SETTINGS.theme,
+    externalEditor: isExternalEditorId(value.externalEditor)
+      ? value.externalEditor
+      : DEFAULT_SETTINGS.externalEditor,
     keybindings,
   }
 }

@@ -249,6 +249,8 @@ export interface InvokeContract {
   'agent:startTerminalAuth': { args: [agentId: string, methodId: string]; result: TerminalInfo }
 
   'app:openExternal': { args: [url: string]; result: void }
+  /** Open a workspace file in the editor chosen in Settings. Rejects with a readable message if it can't launch. */
+  'app:openInEditor': { args: [path: string, line?: number, column?: number]; result: void }
 
   /** Current diagnostics for files open in the language server, plus why there are none if it failed. */
   'diagnostics:all': { args: []; result: { diagnostics: DiagnosticsByPath; error: string | null } }
@@ -334,6 +336,7 @@ export interface LookingglassApi {
   app: {
     getInfo(): Promise<AppInfo>
     openExternal(url: string): Promise<void>
+    openInEditor(path: string, line?: number, column?: number): Promise<void>
     onMenuCommand(listener: Listener<'menu:command'>): Unsubscribe
   }
   window: {

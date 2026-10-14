@@ -30,6 +30,7 @@ const api: LookingglassApi = {
   app: {
     getInfo: () => invoke('app:getInfo'),
     openExternal: (url) => invoke('app:openExternal', url),
+    openInEditor: (path, line, column) => invoke('app:openInEditor', path, line, column),
     onMenuCommand: (listener) => subscribe('menu:command', listener),
   },
   window: {

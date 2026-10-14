@@ -1,3 +1,4 @@
+import { OpenInEditorButton } from '../editor/OpenInEditorButton'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ConsoleEntry, Picked } from '@lookingglass/shared/browser'
 import { useAgents } from '../store/agents'
@@ -205,6 +206,7 @@ function PickedBar({ tabId, items }: { tabId: string; items: Picked[] }) {
             {source.line ? `:${source.line}` : ''}
           </span>
         )}
+        {source && <OpenInEditorButton path={source.path} line={source.line ?? undefined} />}
         <span className="ml-auto" />
         {last.kind === 'element' && (
           <>
