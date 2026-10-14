@@ -1,6 +1,6 @@
 import { Bot } from 'lucide-react'
-import { useState } from 'react'
-import { AgentTab, NewChatMenu, StartChat, useChatLabel } from '../agent/AgentPanel'
+import { useEffect, useRef, useState } from 'react'
+import { AgentTab, StartChat, useChatLabel } from '../agent/AgentPanel'
 import { HistoryMenu } from '../agent/HistoryMenu'
 import { basename } from '../lib/paths'
 import { useAgents } from '../store/agents'
@@ -142,34 +142,92 @@ function NewBrowserTabButton({ labelled = false }: { labelled?: boolean }) {
   )
 }
 
-/** New chat and earlier sessions, opened as tabs. */
-function ChatTabButtons() {
+const menuItem = 'flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-fg/5 disabled:opacity-40'
+
+/** One + button for a new browser tab, a new chat, or an earlier session, all opened as tabs. */
+function NewTabMenu() {
   const hasWorkspace = useWorkspace((s) => !!s.info)
-  const [menu, setMenu] = useState<'new' | 'history' | null>(null)
-  const toggle = (which: 'new' | 'history'): void => setMenu((m) => (m === which ? null : which))
+  const agents = useAgents((s) => s.agents)
+  const browserHint = useShortcut('new-browser-tab')
+  const [menu, setMenu] = useState<'main' | 'history' | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  const close = (): void => setMenu(null)
+
+  useEffect(() => {
+    if (!menu) return
+    const onPointer = (e: MouseEvent): void => {
+      if (!ref.current?.contains(e.target as Node)) close()
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') close()
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menu])
+
   return (
-    <div className="relative flex shrink-0 items-center">
+    <div ref={ref} className="relative flex shrink-0 items-center">
       <button
-        data-testid="tab-new-chat"
-        disabled={!hasWorkspace}
-        title="New chat tab"
-        onClick={() => toggle('new')}
-        className="inline-flex h-full items-center gap-0.5 px-2 text-muted hover:text-fg disabled:opacity-40"
+        data-testid="tab-new"
+        title="New tab"
+        onClick={() => setMenu((m) => (m ? null : 'main'))}
+        className={`h-full px-3 hover:text-fg ${menu ? 'text-fg' : 'text-muted'}`}
       >
-        <Icon icon={Plus} className={iconSize.xs} />
-        <Icon icon={Bot} className={iconSize.sm} />
+        <Icon icon={Plus} className={iconSize.sm} />
       </button>
-      <button
-        data-testid="tab-history"
-        disabled={!hasWorkspace}
-        title="Resume an earlier session in a tab"
-        onClick={() => toggle('history')}
-        className="h-full px-2 text-muted hover:text-fg disabled:opacity-40"
-      >
-        <Icon icon={History} className={iconSize.sm} />
-      </button>
-      {menu === 'new' && <NewChatMenu placement="tab" onClose={() => setMenu(null)} />}
-      {menu === 'history' && <HistoryMenu placement="tab" onClose={() => setMenu(null)} />}
+      {menu === 'main' && (
+        <div
+          data-testid="new-tab-menu"
+          className="absolute top-full right-0 z-10 mt-1 w-64 rounded border border-border bg-panel py-1 shadow-xl"
+        >
+          <button
+            data-testid="new-browser-tab"
+            onClick={() => {
+              close()
+              openBrowserTab()
+            }}
+            className={menuItem}
+          >
+            <Icon icon={Globe} className={iconSize.sm} />
+            <span className="flex-1">Browser tab</span>
+            <span className="font-mono text-[11px] text-muted">{browserHint}</span>
+          </button>
+          <div className="my-1 border-t border-border" />
+          <div className="px-3 py-1 text-[11px] tracking-wide text-muted uppercase">New chat</div>
+          {!hasWorkspace && <div className="px-3 py-1 text-muted">Open a folder to start a chat.</div>}
+          {hasWorkspace &&
+            agents.map((agent) => (
+              <button
+                key={agent.id}
+                data-testid="new-chat-agent"
+                data-agent-id={agent.id}
+                onClick={() => {
+                  close()
+                  void useAgents.getState().newChat(agent.id, { placement: 'tab' })
+                }}
+                className={menuItem}
+              >
+                <Icon icon={Bot} className={iconSize.sm} />
+                {agent.label}
+              </button>
+            ))}
+          <div className="my-1 border-t border-border" />
+          <button
+            data-testid="tab-history"
+            disabled={!hasWorkspace}
+            onClick={() => setMenu('history')}
+            className={menuItem}
+          >
+            <Icon icon={History} className={iconSize.sm} />
+            Resume an earlier session…
+          </button>
+        </div>
+      )}
+      {menu === 'history' && <HistoryMenu placement="tab" onClose={close} />}
     </div>
   )
 }
@@ -267,8 +325,7 @@ export function EditorArea() {
             <TabLabel key={tab.id} tab={tab} />
           ))}
         </div>
-        <NewBrowserTabButton />
-        <ChatTabButtons />
+        <NewTabMenu />
       </div>
       <div className="min-h-0 flex-1">{active && <ActiveTab key={active.id} tab={active} />}</div>
     </div>
