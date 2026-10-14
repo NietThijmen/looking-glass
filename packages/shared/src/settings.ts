@@ -3,6 +3,47 @@ import type { MenuCommand } from './ipc'
 
 export type ThemeSetting = 'dark' | 'light' | 'system'
 
+/** A re-usable prompt, run from the composer as `!name`. */
+export interface SavedPrompt {
+  name: string
+  text: string
+}
+
+/** Letters, digits, `-` and `_`, so `!name` ends at the first space. */
+export const PROMPT_NAME = /^[\w-]+$/
+
+/** Whether a prompt's text uses `$1`…`$9` or `$ARGUMENTS`. */
+export function usesArguments(text: string): boolean {
+  return /\$(ARGUMENTS|[1-9])/.test(text)
+}
+
+/** Splits the arguments after `!name` on spaces; "double" or 'single' quotes group words. */
+export function splitArguments(line: string): string[] {
+  return [...line.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]!)
+}
+
+/**
+ * Replaces each `!name` that matches a saved prompt with the prompt's text. The rest of the line
+ * after `!name` is its arguments: `$1`…`$9` and `$ARGUMENTS` in the text are filled in, and when
+ * the text has none the arguments are appended to it.
+ */
+export function expandPrompts(text: string, prompts: SavedPrompt[]): string {
+  if (!prompts.length) return text
+  return text.replace(/(^|\s)!([\w-]+)([^\n]*)/g, (whole, lead: string, name: string, rest: string) => {
+    const prompt = prompts.find((p) => p.name === name)
+    if (!prompt) return whole
+    // `!name` must end at a space or the end of the line (so `!release.` is not a call).
+    if (rest && !/^\s/.test(rest)) return whole
+    const raw = rest.trim()
+    if (!usesArguments(prompt.text)) return lead + (raw ? `${prompt.text} ${raw}` : prompt.text)
+    const args = splitArguments(raw)
+    const filled = prompt.text.replace(/\$(ARGUMENTS|[1-9])/g, (_, ref: string) =>
+      ref === 'ARGUMENTS' ? raw : (args[Number(ref) - 1] ?? ''),
+    )
+    return lead + filled
+  })
+}
+
 /** App-wide preferences, stored in the app's userData folder. */
 export interface UserSettings {
   theme: ThemeSetting
@@ -10,12 +51,15 @@ export interface UserSettings {
   externalEditor: ExternalEditorId
   /** Electron accelerators that replace the defaults below; an empty string removes the shortcut. */
   keybindings: Partial<Record<MenuCommand, string>>
+  /** Re-usable prompts, run from the composer as `!name`. */
+  prompts: SavedPrompt[]
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
   theme: 'dark',
   externalEditor: DEFAULT_EXTERNAL_EDITOR,
   keybindings: {},
+  prompts: [],
 }
 
 export interface CommandInfo {

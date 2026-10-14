@@ -54,6 +54,25 @@ The chip shows exactly what will be sent: HTML, matched CSS rules, computed styl
 | `@browser`         | Screenshot and URL of the open page     |
 | `@browser-console` | Console output, errors, failed requests |
 
+### Saved prompts
+
+Save prompts you re-use under **Settings → Prompts**, then run them from the message box with `!`. Typing `!` lists your prompts; `Enter` or `Tab` picks one. For example, a prompt named `release`:
+
+```text
+Bump the version, update the changelog, tag it and push.
+```
+
+Type `!release` and send, or pick it from the list to read and edit the text first.
+
+Everything after `!name` on the same line is the prompt's arguments. Use them in the prompt text with:
+
+| Placeholder  | Filled with                                                 |
+| ------------ | ----------------------------------------------------------- |
+| `$1` … `$9`  | The first to ninth argument (`"double quotes"` group words) |
+| `$ARGUMENTS` | Everything after the name                                   |
+
+A prompt named `deploy` with the text `Deploy $1 to $2 and check the logs.` runs as `!deploy api staging`. If a prompt has no placeholders, the arguments are added to the end of its text, so `!release 1.4.0` sends "Bump the version, … and push. 1.4.0". Picking a prompt that has placeholders from the list leaves `!deploy ` in the box for you to add the arguments.
+
 ### The agent can use the browser too
 
 Every agent gets browser tools over MCP. It can snapshot the page, click, type, resize to a phone viewport, read the console and take screenshots. So "fix the layout on mobile and check it" works in one turn.

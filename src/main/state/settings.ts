@@ -7,6 +7,8 @@ import {
   COMMANDS,
   DEFAULT_SETTINGS,
   isValidAccelerator,
+  PROMPT_NAME,
+  type SavedPrompt,
   type ThemeSetting,
   type UserSettings,
 } from '@lookingglass/shared/settings'
@@ -25,6 +27,17 @@ export function sanitizeSettings(raw: unknown): UserSettings {
     if (known.has(command) && typeof key === 'string' && isValidAccelerator(key))
       keybindings[command as MenuCommand] = key
   }
+  const prompts: SavedPrompt[] = []
+  for (const p of Array.isArray(value.prompts) ? value.prompts : []) {
+    const name = typeof p?.name === 'string' ? p.name.trim() : ''
+    if (
+      PROMPT_NAME.test(name) &&
+      typeof p.text === 'string' &&
+      p.text.trim() &&
+      !prompts.some((q) => q.name === name)
+    )
+      prompts.push({ name, text: p.text })
+  }
   return {
     theme: THEMES.includes(value.theme as ThemeSetting)
       ? (value.theme as ThemeSetting)
@@ -33,6 +46,7 @@ export function sanitizeSettings(raw: unknown): UserSettings {
       ? value.externalEditor
       : DEFAULT_SETTINGS.externalEditor,
     keybindings,
+    prompts,
   }
 }
 

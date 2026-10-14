@@ -1,8 +1,10 @@
 import type { SessionConfigOption } from '@agentclientprotocol/sdk'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { expandPrompts, usesArguments, type SavedPrompt } from '@lookingglass/shared/settings'
 import { basename } from '../lib/paths'
 import { useAgents, type Attachment, type AttachmentPart, type Chat } from '../store/agents'
 import { useEditor } from '../store/editor'
+import { useSettings } from '../store/settings'
 import {
   AtSign,
   Chevron,
@@ -20,6 +22,12 @@ import { imageAttachment, mentionOptions, optionLabel, resolveMention, type Ment
 /** `@query` right before the caret, if the user is typing a mention. */
 function mentionQuery(text: string, caret: number): { start: number; query: string } | null {
   const match = /(^|\s)@([^\s@]*)$/.exec(text.slice(0, caret))
+  return match ? { start: caret - match[2]!.length - 1, query: match[2]! } : null
+}
+
+/** `!query` right before the caret, if the user is typing a saved prompt. */
+function promptQuery(text: string, caret: number): { start: number; query: string } | null {
+  const match = /(^|\s)!([\w-]*)$/.exec(text.slice(0, caret))
   return match ? { start: caret - match[2]!.length - 1, query: match[2]! } : null
 }
 
@@ -128,6 +136,32 @@ export function Composer({ chat }: { chat: Chat }) {
     [open, mention?.query, files], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
+  const prompts = useSettings((s) => s.settings.prompts)
+  const bang = promptQuery(text, caret)
+  const promptsOpen = bang !== null && !open && dismissedAt !== bang.start
+  const promptOptions = useMemo(
+    () =>
+      promptsOpen && bang
+        ? prompts.filter((p) => p.name.toLowerCase().startsWith(bang.query.toLowerCase()))
+        : [],
+    [promptsOpen, bang?.query, prompts], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
+  const pickPrompt = (prompt: SavedPrompt): void => {
+    if (!bang) return
+    const end = bang.start + 1 + bang.query.length
+    // A prompt that takes arguments stays a `!name ` token for the user to add them to.
+    const insert = usesArguments(prompt.text) ? `!${prompt.name} ` : prompt.text
+    setText(text.slice(0, bang.start) + insert + text.slice(end))
+    setHighlight(0)
+    const at = bang.start + insert.length
+    setCaret(at)
+    requestAnimationFrame(() => {
+      ref.current?.focus()
+      ref.current?.setSelectionRange(at, at)
+    })
+  }
+
   const pick = async (option: MentionOption): Promise<void> => {
     if (!mention) return
     const next = text.slice(0, mention.start) + text.slice(caret)
@@ -165,7 +199,7 @@ export function Composer({ chat }: { chat: Chat }) {
       const resolved = await resolveMention({ kind: 'file', path: activeFile }, caps)
       if (!('error' in resolved)) all.push(resolved)
     }
-    void send(chat.key, text, all)
+    void send(chat.key, expandPrompts(text, prompts), all)
     setText('')
     setAttachments([])
     setExpanded(null)
@@ -192,6 +226,29 @@ export function Composer({ chat }: { chat: Chat }) {
             >
               <Icon icon={mentionOptionIcon[option.kind]} className={`${iconSize.sm} text-muted`} />
               <span className="truncate font-mono text-[12px]">{optionLabel(option)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {promptOptions.length > 0 && (
+        <div
+          data-testid="prompt-menu"
+          className="absolute right-2 bottom-full left-2 z-10 mb-1 max-h-72 overflow-auto rounded border border-border bg-panel py-1 shadow-xl"
+        >
+          {promptOptions.map((p, i) => (
+            <button
+              key={p.name}
+              data-testid="prompt-option"
+              data-name={p.name}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                pickPrompt(p)
+              }}
+              className={`flex w-full items-baseline gap-2 px-2 py-1 text-left ${i === highlight ? 'bg-accent/20' : 'hover:bg-fg/5'}`}
+            >
+              <span className="font-mono text-[12px]">!{p.name}</span>
+              <span className="truncate text-[11px] text-muted">{p.text.replace(/\s+/g, ' ')}</span>
             </button>
           ))}
         </div>
@@ -276,7 +333,9 @@ export function Composer({ chat }: { chat: Chat }) {
         value={text}
         disabled={!ready}
         placeholder={
-          ready ? 'Ask anything…  @ to mention files, selection, terminal, git diff, ci' : 'Starting agent…'
+          ready
+            ? 'Ask anything…  @ to mention files, selection, terminal, git diff, ci  ·  ! for prompts'
+            : 'Starting agent…'
         }
         onChange={(e) => {
           setText(e.target.value)
@@ -296,6 +355,24 @@ export function Composer({ chat }: { chat: Chat }) {
           void addImages(e.dataTransfer.files)
         }}
         onKeyDown={(e) => {
+          if (promptOptions.length) {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              e.preventDefault()
+              const step = e.key === 'ArrowDown' ? 1 : -1
+              setHighlight((h) => (h + step + promptOptions.length) % promptOptions.length)
+              return
+            }
+            if (e.key === 'Enter' || e.key === 'Tab') {
+              e.preventDefault()
+              pickPrompt(promptOptions[highlight] ?? promptOptions[0]!)
+              return
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              setDismissedAt(bang!.start)
+              return
+            }
+          }
           if (open && options.length) {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
               e.preventDefault()

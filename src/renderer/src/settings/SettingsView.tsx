@@ -5,7 +5,9 @@ import {
   COMMANDS,
   formatAccelerator,
   keyFor,
+  PROMPT_NAME,
   type CustomAgentConfig,
+  type SavedPrompt,
   type ThemeSetting,
 } from '@lookingglass/shared/settings'
 import { EXTERNAL_EDITORS, type ExternalEditorId } from '@lookingglass/shared/editors'
@@ -329,15 +331,141 @@ function AgentsSection() {
   )
 }
 
+function PromptsSection() {
+  const saved = useSettings((s) => s.settings.prompts)
+  const [drafts, setDrafts] = useState<SavedPrompt[]>(saved)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+
+  const update = (i: number, patch: Partial<SavedPrompt>): void => {
+    setDone(false)
+    setDrafts((list) => list.map((d, j) => (j === i ? { ...d, ...patch } : d)))
+  }
+  const save = async (): Promise<void> => {
+    const prompts = drafts.map((d) => ({ name: d.name.trim().replace(/^!/, ''), text: d.text }))
+    const bad = prompts.find((p) => !PROMPT_NAME.test(p.name) || !p.text.trim())
+    if (bad) return setError('Each prompt needs a name (letters, digits, - or _) and some text.')
+    const dupe = prompts.find((p, i) => prompts.findIndex((q) => q.name === p.name) !== i)
+    if (dupe) return setError(`Two prompts are named !${dupe.name}.`)
+    setError(null)
+    await useSettings.getState().set({ prompts })
+    setDrafts(prompts)
+    setDone(true)
+  }
+  const field =
+    'w-full rounded border border-border bg-bg px-2 py-1 outline-none select-text focus:border-accent'
+
+  return (
+    <Section title="Prompts">
+      <p className="mb-3 text-muted">
+        Re-usable prompts. Type <span className="font-mono text-[12px]">!</span> in the composer to pick one,
+        e.g. <span className="font-mono text-[12px]">!release</span>; it is replaced by the prompt's text
+        before you send. Add arguments after the name (
+        <span className="font-mono text-[12px]">!deploy api staging</span>) and use{' '}
+        <span className="font-mono text-[12px]">$1</span>…<span className="font-mono text-[12px]">$9</span> or{' '}
+        <span className="font-mono text-[12px]">$ARGUMENTS</span> in the text; without those, they are added
+        to the end.
+      </p>
+      {drafts.map((d, i) => (
+        <div key={i} data-testid="saved-prompt" className="mb-3 rounded border border-border p-3">
+          <div className="mb-2 flex items-end gap-2">
+            <label className="flex-1">
+              <div className="mb-0.5 text-[11px] text-muted">Name</div>
+              <div className="flex items-center gap-1">
+                <span className="font-mono text-muted">!</span>
+                <input
+                  data-testid="prompt-name"
+                  className={`${field} font-mono text-[12px]`}
+                  placeholder="release"
+                  value={d.name}
+                  onChange={(e) => update(i, { name: e.target.value })}
+                />
+              </div>
+            </label>
+            <button
+              title="Remove"
+              className="pb-1 text-muted hover:text-fg"
+              onClick={() => {
+                setDone(false)
+                setDrafts((list) => list.filter((_, j) => j !== i))
+              }}
+            >
+              <Icon icon={X} className={iconSize.md} />
+            </button>
+          </div>
+          <label className="block">
+            <div className="mb-0.5 text-[11px] text-muted">Prompt</div>
+            <textarea
+              data-testid="prompt-text"
+              rows={4}
+              className={field}
+              placeholder="Bump the version, update the changelog, tag it and push."
+              value={d.text}
+              onChange={(e) => update(i, { text: e.target.value })}
+            />
+          </label>
+        </div>
+      ))}
+      <div className="flex items-center gap-3">
+        <button
+          data-testid="add-prompt"
+          onClick={() => {
+            setDone(false)
+            setDrafts((list) => [...list, { name: '', text: '' }])
+          }}
+          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 hover:bg-fg/5"
+        >
+          <Icon icon={Plus} className={iconSize.sm} /> Add prompt
+        </button>
+        <button
+          data-testid="save-prompts"
+          onClick={() => void save()}
+          className="rounded bg-accent px-3 py-1 text-bg hover:opacity-90"
+        >
+          Save prompts
+        </button>
+        {done && <span className="text-[12px] text-emerald-500">Saved.</span>}
+        {error && <span className="text-[12px] text-red-400">{error}</span>}
+      </div>
+    </Section>
+  )
+}
+
+const TABS = ['General', 'Agents', 'Prompts'] as const
+type SettingsTab = (typeof TABS)[number]
+
 export function SettingsView() {
+  const [tab, setTab] = useState<SettingsTab>('General')
   return (
     <div className="h-full overflow-auto" data-testid="settings">
       <div className="mx-auto max-w-3xl p-6">
-        <h1 className="mb-6 text-lg text-fg">Settings</h1>
-        <ThemeSection />
-        <ExternalEditorSection />
-        <KeybindingsSection />
-        <AgentsSection />
+        <h1 className="mb-4 text-lg text-fg">Settings</h1>
+        <div role="tablist" className="mb-6 flex gap-1 border-b border-border">
+          {TABS.map((t) => (
+            <button
+              key={t}
+              role="tab"
+              data-testid="settings-tab"
+              data-tab={t}
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={`-mb-px border-b-2 px-3 py-1.5 ${
+                tab === t ? 'border-accent text-fg' : 'border-transparent text-muted hover:text-fg'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        {tab === 'General' && (
+          <>
+            <ThemeSection />
+            <ExternalEditorSection />
+            <KeybindingsSection />
+          </>
+        )}
+        {tab === 'Agents' && <AgentsSection />}
+        {tab === 'Prompts' && <PromptsSection />}
       </div>
     </div>
   )
