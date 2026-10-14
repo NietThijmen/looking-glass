@@ -103,6 +103,8 @@ interface AgentsStore {
   ask(text: string, attachments: Attachment[], options?: { newChat?: boolean }): Promise<void>
   cancel(key: number): Promise<void>
   setMode(key: number, modeId: string): Promise<void>
+  /** Switch an empty chat to another agent (a session is tied to its agent). Also the default for new chats. */
+  setAgent(key: number, agentId: string): Promise<void>
   respondPermission(requestId: string, optionId: string | null): void
 
   applyUpdate(sessionId: string, update: SessionUpdate): void
@@ -322,6 +324,14 @@ export const useAgents = create<AgentsStore>((set, get) => {
       if (!chat?.sessionId || !chat.modes) return
       await window.lookingglass.agent.setMode(chat.sessionId, modeId)
       patch(key, (c) => ({ modes: c.modes ? { ...c.modes, currentModeId: modeId } : null }))
+    },
+
+    async setAgent(key, agentId) {
+      const chat = get().chats.find((c) => c.key === key)
+      if (!chat || chat.busy || chat.items.length || chat.agentId === agentId) return
+      set({ defaultAgentId: agentId })
+      patch(key, { agentId, sessionId: null, modes: null, canResume: false, promptCapabilities: {} })
+      await startSession(key)
     },
 
     respondPermission(requestId, optionId) {

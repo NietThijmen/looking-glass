@@ -92,7 +92,8 @@ export function Composer({ chat }: { chat: Chat }) {
   const activeFile = useEditor(
     (s) => s.tabs.find((t) => t.id === s.lastCodeId && t.kind === 'file')?.path ?? null,
   )
-  const { send, cancel, setMode } = useAgents.getState()
+  const { send, cancel, setMode, setAgent } = useAgents.getState()
+  const agents = useAgents((s) => s.agents)
   const ref = useRef<HTMLTextAreaElement>(null)
   const ready = chat.state === 'ready'
   const caps = chat.promptCapabilities
@@ -318,6 +319,22 @@ export function Composer({ chat }: { chat: Chat }) {
       />
       {error && <div className="mt-1 text-[11px] text-amber-300">{error}</div>}
       <div className="mt-1.5 flex items-center gap-2">
+        {agents.length > 1 && (
+          <select
+            data-testid="agent-select"
+            value={chat.agentId}
+            disabled={chat.busy || chat.items.length > 0}
+            title={chat.items.length ? 'An agent is fixed once a chat has started' : 'Agent'}
+            onChange={(e) => void setAgent(chat.key, e.target.value)}
+            className="rounded border border-border bg-bg px-1 py-0.5 text-[11px] text-muted outline-none disabled:opacity-60"
+          >
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label}
+              </option>
+            ))}
+          </select>
+        )}
         {chat.modes && chat.modes.availableModes.length > 1 && (
           <select
             value={chat.modes.currentModeId}
