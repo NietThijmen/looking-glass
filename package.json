@@ -4,7 +4,7 @@
   "description": "An AI-first code editor for ACP agents (Claude Code, Codex, …)",
   "main": "./out/main/index.js",
   "scripts": {
-    "postinstall": "node scripts/fix-node-pty.mjs",
+    "postinstall": "node scripts/fix-node-pty.mjs && node -e \"require('electron')\"",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
