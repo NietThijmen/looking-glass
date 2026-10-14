@@ -193,6 +193,22 @@ export class BrowserService {
       .catch(() => undefined)
   }
 
+  /** Resolves once the tab has stopped loading, or after `timeoutMs` so a hung page can't stall a tool. */
+  whenLoaded(tabId: string, timeoutMs = 15_000): Promise<void> {
+    const wc = this.#tab(tabId).view.webContents
+    return new Promise((resolve) => {
+      const done = (): void => {
+        clearTimeout(timer)
+        wc.off('did-stop-loading', done)
+        wc.off('destroyed', done)
+        resolve()
+      }
+      const timer = setTimeout(done, timeoutMs)
+      wc.on('did-stop-loading', done)
+      wc.on('destroyed', done)
+    })
+  }
+
   back(tabId: string): void {
     this.#tab(tabId).view.webContents.navigationHistory.goBack()
   }
