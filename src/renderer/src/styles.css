@@ -121,3 +121,181 @@ body {
 .markdown hr {
   border-color: var(--color-border);
 }
+
+/* Pull request descriptions: spacing and type scale follow GitHub's markdown-body. */
+.markdown-github {
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+  --alert-note: #4493f8;
+  --alert-tip: #3fb950;
+  --alert-important: #ab7df8;
+  --alert-warning: #d29922;
+  --alert-caution: #f85149;
+}
+@media (prefers-color-scheme: light) {
+  .markdown-github {
+    --alert-note: #0969da;
+    --alert-tip: #1a7f37;
+    --alert-important: #8250df;
+    --alert-warning: #9a6700;
+    --alert-caution: #d1242f;
+  }
+}
+.markdown-github > * + * {
+  margin-top: 0;
+}
+.markdown-github > :first-child {
+  margin-top: 0 !important;
+}
+.markdown-github > :last-child {
+  margin-bottom: 0 !important;
+}
+.markdown-github p,
+.markdown-github blockquote,
+.markdown-github ul,
+.markdown-github ol,
+.markdown-github table,
+.markdown-github pre,
+.markdown-github details,
+.markdown-github .markdown-alert {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+.markdown-github h1,
+.markdown-github h2,
+.markdown-github h3,
+.markdown-github h4,
+.markdown-github h5,
+.markdown-github h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 24px;
+  margin-bottom: 16px;
+}
+.markdown-github h1 {
+  font-size: 2em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--color-border);
+}
+.markdown-github h2 {
+  font-size: 1.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--color-border);
+}
+.markdown-github h3 {
+  font-size: 1.25em;
+}
+.markdown-github h4 {
+  font-size: 1em;
+}
+.markdown-github h5 {
+  font-size: 0.875em;
+}
+.markdown-github h6 {
+  font-size: 0.85em;
+  color: var(--color-muted);
+}
+.markdown-github ul,
+.markdown-github ol {
+  padding-left: 2em;
+}
+.markdown-github ul ul,
+.markdown-github ul ol,
+.markdown-github ol ol,
+.markdown-github ol ul {
+  margin-bottom: 0;
+}
+.markdown-github li + li {
+  margin-top: 0.25em;
+}
+.markdown-github li:has(> input[type='checkbox']) {
+  list-style: none;
+}
+.markdown-github li > input[type='checkbox'] {
+  margin: 0 0.2em 0.25em -1.4em;
+  vertical-align: middle;
+}
+.markdown-github a {
+  text-decoration: none;
+}
+.markdown-github a:hover {
+  text-decoration: underline;
+}
+.markdown-github code {
+  font-size: 85%;
+  padding: 0.2em 0.4em;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-muted) 20%, transparent);
+}
+.markdown-github pre {
+  font-size: 85%;
+  line-height: 1.45;
+  padding: 16px;
+  border: none;
+  border-radius: 6px;
+}
+.markdown-github pre code {
+  font-size: 100%;
+  background: none;
+  padding: 0;
+}
+.markdown-github blockquote {
+  border-left: 0.25em solid var(--color-border);
+  padding: 0 1em;
+}
+.markdown-github hr {
+  height: 0.25em;
+  margin: 24px 0;
+  border: 0;
+  background: var(--color-border);
+}
+.markdown-github table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow: auto;
+}
+.markdown-github th,
+.markdown-github td {
+  padding: 6px 13px;
+}
+.markdown-github th {
+  font-weight: 600;
+}
+.markdown-github tbody tr:nth-child(2n) {
+  background: var(--color-panel);
+}
+.markdown-github img {
+  max-width: 100%;
+}
+.markdown-github .markdown-alert {
+  padding: 0.5rem 1rem;
+  border-left: 0.25em solid var(--alert-color, var(--color-border));
+}
+.markdown-github .markdown-alert > :last-child > :last-child {
+  margin-bottom: 0;
+}
+.markdown-github .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  line-height: 1;
+  margin-bottom: 8px;
+  color: var(--alert-color);
+}
+.markdown-github .markdown-alert-note {
+  --alert-color: var(--alert-note);
+}
+.markdown-github .markdown-alert-tip {
+  --alert-color: var(--alert-tip);
+}
+.markdown-github .markdown-alert-important {
+  --alert-color: var(--alert-important);
+}
+.markdown-github .markdown-alert-warning {
+  --alert-color: var(--alert-warning);
+}
+.markdown-github .markdown-alert-caution {
+  --alert-color: var(--alert-caution);
+}

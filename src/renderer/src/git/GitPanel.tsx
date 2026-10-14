@@ -5,6 +5,7 @@ import { basename, dirname } from '../lib/paths'
 import { useEditor } from '../store/editor'
 import { useWorkspace } from '../store/workspace'
 import { StatusDot } from '../ui/icon'
+import { runCommit } from './commit'
 
 function Entry({ entry }: { entry: GitStatusEntry }) {
   return (
@@ -34,41 +35,17 @@ function Entry({ entry }: { entry: GitStatusEntry }) {
 export function GitPanel() {
   const info = useWorkspace((s) => s.info)
   const git = useWorkspace((s) => s.git)
-  const refreshGit = useWorkspace((s) => s.refreshGit)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null)
 
-  async function runCommit(pushAfter: boolean): Promise<void> {
-    const trimmed = message.trim()
-    if (!trimmed) {
-      setFeedback({ ok: false, text: 'Write a commit message first.' })
-      return
-    }
+  async function submit(pushAfter: boolean): Promise<void> {
     setBusy(true)
     setFeedback(null)
     try {
-      const commit = await window.lookingglass.git.commit(trimmed)
-      if (!commit.ok) {
-        setFeedback({ ok: false, text: commit.error ?? 'Commit failed' })
-        return
-      }
-      if (pushAfter) {
-        const push = await window.lookingglass.git.push()
-        if (!push.ok) {
-          setFeedback({
-            ok: false,
-            text: `Committed ${commit.shortHash}, but push failed: ${push.error ?? 'unknown error'}`,
-          })
-          await refreshGit()
-          return
-        }
-        setFeedback({ ok: true, text: `Committed and pushed ${commit.shortHash}` })
-      } else {
-        setFeedback({ ok: true, text: `Committed ${commit.shortHash}` })
-      }
-      setMessage('')
-      await refreshGit()
+      const result = await runCommit(message, pushAfter)
+      setFeedback(result)
+      if (result.ok) setMessage('')
     } finally {
       setBusy(false)
     }
@@ -109,7 +86,7 @@ export function GitPanel() {
             type="button"
             data-testid="git-commit"
             disabled={busy || !message.trim()}
-            onClick={() => void runCommit(false)}
+            onClick={() => void submit(false)}
             className="rounded border border-border px-3 py-1 text-[12px] hover:bg-fg/5 disabled:opacity-40"
           >
             Commit
@@ -118,7 +95,7 @@ export function GitPanel() {
             type="button"
             data-testid="git-commit-push"
             disabled={busy || !message.trim()}
-            onClick={() => void runCommit(true)}
+            onClick={() => void submit(true)}
             className="rounded bg-accent px-3 py-1 text-[12px] text-bg hover:opacity-90 disabled:opacity-40"
           >
             Commit &amp; push

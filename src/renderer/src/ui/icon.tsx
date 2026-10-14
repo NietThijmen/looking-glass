@@ -19,9 +19,11 @@ import {
   FileText,
   Folder,
   GitBranch,
+  GitPullRequest,
   Globe,
   History,
   Image,
+  ListChecks,
   Loader2,
   Paperclip,
   Pencil,
@@ -87,6 +89,7 @@ export const mentionOptionIcon: Record<MentionOption['kind'], LucideIcon> = {
   browser: Globe,
   'browser-console': AlertTriangle,
   problems: XCircle,
+  ci: ListChecks,
 }
 
 export const toolKindIcon: Record<ToolKind, LucideIcon> = {
@@ -113,6 +116,7 @@ export {
   Crosshair,
   Diff,
   GitBranch,
+  GitPullRequest,
   Globe,
   History,
   Image,

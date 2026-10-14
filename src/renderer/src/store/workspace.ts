@@ -1,5 +1,12 @@
 import { create } from 'zustand'
-import type { DirEntry, FsChange, GitStatus, GitStatusEntry, WorkspaceInfo } from '@lookingglass/shared/ipc'
+import type {
+  DirEntry,
+  FsChange,
+  GitStatus,
+  GitStatusEntry,
+  PullRequestDetail,
+  WorkspaceInfo,
+} from '@lookingglass/shared/ipc'
 import { ancestors, dirname } from '../lib/paths'
 
 interface WorkspaceStore {
@@ -14,6 +21,10 @@ interface WorkspaceStore {
   git: GitStatus | null
   /** Git status by file path, plus a rolled-up marker for every ancestor dir. */
   gitByPath: Record<string, GitStatusEntry['status']>
+  /** Open pull request for the current branch. Null is "no PR", including a missing `gh` login. */
+  pullRequest: PullRequestDetail | null
+  /** True while a branch change is resolving `git.pullRequest`. Typing does not wait on this. */
+  pullRequestPending: boolean
 
   setWorkspace(info: WorkspaceInfo | null): Promise<void>
   loadDir(path: string): Promise<void>
@@ -21,6 +32,7 @@ interface WorkspaceStore {
   toggleDir(path: string): void
   revealPath(path: string): void
   refreshGit(): Promise<void>
+  refreshPullRequest(): Promise<void>
   applyFsChanges(changes: FsChange[]): void
 }
 
@@ -43,6 +55,8 @@ export const useWorkspace = create<WorkspaceStore>((set, get) => ({
   pendingTreeReveal: null,
   git: null,
   gitByPath: {},
+  pullRequest: null,
+  pullRequestPending: false,
 
   async setWorkspace(info) {
     set({
@@ -53,6 +67,8 @@ export const useWorkspace = create<WorkspaceStore>((set, get) => ({
       pendingTreeReveal: null,
       git: null,
       gitByPath: {},
+      pullRequest: null,
+      pullRequestPending: false,
     })
     if (!info) return
     await Promise.all([get().loadFilePaths(), get().refreshGit()])
@@ -96,8 +112,36 @@ export const useWorkspace = create<WorkspaceStore>((set, get) => ({
 
   async refreshGit() {
     if (!get().info) return
+    const previous = get().git?.branch ?? null
     const git = await window.lookingglass.git.status().catch(() => null)
-    set({ git, gitByPath: indexGit(git) })
+    if (!git) {
+      set({ git: null, gitByPath: {}, pullRequest: null, pullRequestPending: false })
+      return
+    }
+    const branchChanged = git.branch !== previous
+    set({
+      git,
+      gitByPath: indexGit(git),
+      ...(branchChanged ? { pullRequest: null, pullRequestPending: git.branch !== null } : {}),
+    })
+    // Lookup stays off the status call. Refetch only when the branch changes.
+    if (branchChanged) void get().refreshPullRequest()
+  },
+
+  async refreshPullRequest() {
+    const branch = get().git?.branch
+    if (!get().info || !branch) {
+      set({ pullRequest: null, pullRequestPending: false })
+      return
+    }
+    try {
+      const pullRequest = await window.lookingglass.git.pullRequest()
+      if (get().git?.branch !== branch) return
+      set({ pullRequest, pullRequestPending: false })
+    } catch {
+      if (get().git?.branch !== branch) return
+      set({ pullRequest: null, pullRequestPending: false })
+    }
   },
 
   applyFsChanges(changes) {

@@ -13,8 +13,21 @@ import { useBrowser } from '../store/browser'
 import { useReview } from '../store/review'
 import { SettingsView } from '../settings/SettingsView'
 import { useShortcut } from '../store/settings'
-import { Diff, Globe, History, Icon, Plus, Settings, Sparkles, StatusDot, X, iconSize } from '../ui/icon'
+import {
+  Diff,
+  GitPullRequest,
+  Globe,
+  History,
+  Icon,
+  Plus,
+  Settings,
+  Sparkles,
+  StatusDot,
+  X,
+  iconSize,
+} from '../ui/icon'
 import { GitDiffView } from './GitDiffView'
+import { PullRequestView } from './PullRequestView'
 
 function TabLabel({ tab }: { tab: Tab }) {
   const dirty = useEditor((s) => isDirty(s.buffers[tab.path]))
@@ -26,6 +39,7 @@ function TabLabel({ tab }: { tab: Tab }) {
     tab.kind === 'agent' ? s.chats.find((c) => c.key === agentTabKey(tab)) : undefined,
   )
   const chatLabel = useChatLabel(chat)
+  const pullRequest = useWorkspace((s) => (tab.kind === 'pull-request' ? s.pullRequest : null))
   const label =
     tab.kind === 'browser'
       ? browserTitle || 'New tab'
@@ -33,7 +47,11 @@ function TabLabel({ tab }: { tab: Tab }) {
         ? 'Settings'
         : tab.kind === 'agent'
           ? chatLabel
-          : basename(tab.path)
+          : tab.kind === 'pull-request'
+            ? pullRequest
+              ? `PR #${pullRequest.number}`
+              : 'Pull request'
+            : basename(tab.path)
   const { activate, closeTab } = useEditor.getState()
   return (
     <div
@@ -42,7 +60,13 @@ function TabLabel({ tab }: { tab: Tab }) {
       data-testid="editor-tab"
       data-path={tab.path}
       data-dirty={dirty}
-      title={tab.kind === 'agent' ? chatLabel : tab.path}
+      title={
+        tab.kind === 'agent'
+          ? chatLabel
+          : tab.kind === 'pull-request'
+            ? (pullRequest?.title ?? 'Pull request')
+            : tab.path
+      }
       onMouseDown={(e) => {
         if (e.button === 1) closeTab(tab.id)
         else activate(tab.id)
@@ -53,6 +77,7 @@ function TabLabel({ tab }: { tab: Tab }) {
     >
       {tab.kind === 'diff' && <Icon icon={Diff} className={`${iconSize.sm} text-accent`} />}
       {tab.kind === 'review' && <Icon icon={Sparkles} className={`${iconSize.sm} text-amber-300`} />}
+      {tab.kind === 'pull-request' && <Icon icon={GitPullRequest} className={`${iconSize.sm} text-accent`} />}
       {tab.kind === 'browser' && <Icon icon={Globe} className={iconSize.sm} />}
       {tab.kind === 'settings' && <Icon icon={Settings} className={iconSize.sm} />}
       {tab.kind === 'agent' &&
@@ -157,6 +182,7 @@ function ActiveTab({ tab }: { tab: Tab }) {
 
   if (tab.kind === 'diff') return <GitDiffView path={tab.path} />
   if (tab.kind === 'review') return <ReviewView path={tab.path} />
+  if (tab.kind === 'pull-request') return <PullRequestView />
   if (tab.kind === 'browser') return <BrowserTab tabId={tab.path} />
   if (tab.kind === 'settings') return <SettingsView />
   if (tab.kind === 'agent') return <AgentTab chatKey={agentTabKey(tab)} />

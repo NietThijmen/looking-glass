@@ -1,5 +1,6 @@
 import { File } from '@pierre/diffs/react'
 import type { BlockNode, CodeBlockNode } from '@tanstack/markdown'
+import { calloutsExtension } from '@tanstack/markdown/extensions/callouts'
 import { streamingMarkdownExtension } from '@tanstack/markdown/extensions/streaming'
 import { parseMarkdown } from '@tanstack/markdown/parser'
 import {
@@ -9,6 +10,7 @@ import {
 } from '@tanstack/markdown/react'
 import { memo, useMemo } from 'react'
 import { baseOptions } from '../editor/diffsConfig'
+import { autolinkExtension } from './autolink'
 
 // Agent output is untrusted: keep TanStack Markdown's safe defaults (no raw HTML,
 // executable URLs dropped). Links open in the system browser, never in the app.
@@ -31,6 +33,8 @@ const settled: MarkdownReactOptions = { components }
 // The streaming profile tolerates unfinished syntax (open fences, half-written
 // emphasis). Each update re-parses the accumulated text; no parser state is kept.
 const streaming: MarkdownReactOptions = { components, extensions: [streamingMarkdownExtension()] }
+// GitHub-flavoured bodies (pull request descriptions): alerts (> [!NOTE]) and bare-URL autolinks.
+const github: MarkdownReactOptions = { components, extensions: [calloutsExtension(), autolinkExtension()] }
 
 const codeOptions = { ...baseOptions, overflow: 'wrap' } as const
 
@@ -55,8 +59,14 @@ function renderBlock(node: BlockNode, index: number, options: MarkdownReactOptio
   return renderBlockReact(node, options, String(index))
 }
 
-export const Markdown = memo(function Markdown({ source, live = false }: { source: string; live?: boolean }) {
-  const options = live ? streaming : settled
+type MarkdownProps = { source: string; live?: boolean; flavor?: 'chat' | 'github' }
+
+export const Markdown = memo(function Markdown({ source, live = false, flavor = 'chat' }: MarkdownProps) {
+  const options = flavor === 'github' ? github : live ? streaming : settled
   const document = useMemo(() => parseMarkdown(source, options), [source, options])
-  return <div className="markdown">{document.children.map((node, i) => renderBlock(node, i, options))}</div>
+  return (
+    <div className={flavor === 'github' ? 'markdown markdown-github' : 'markdown'}>
+      {document.children.map((node, i) => renderBlock(node, i, options))}
+    </div>
+  )
 })
