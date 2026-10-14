@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { EditorSnapshot } from '@lookingglass/shared/agent'
 import type { Diagnostic, DiagnosticSeverity, DiagnosticsByPath } from '@lookingglass/shared/diagnostics'
-import type { WorkspaceService } from '../workspace/WorkspaceService'
+import type { WorkspaceService } from '@lookingglass/workspace'
 import { LspClient, type LspProcessSpec } from './LspClient'
 
 const require = createRequire(import.meta.url)

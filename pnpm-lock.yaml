@@ -216,6 +216,9 @@ importers:
       '@lookingglass/shared':
         specifier: workspace:*
         version: link:packages/shared
+      '@lookingglass/workspace':
+        specifier: workspace:*
+        version: link:packages/workspace
       '@modelcontextprotocol/sdk':
         specifier: 1.32.1
         version: 1.32.1(supports-color@7.2.0)(zod@4.6.6)

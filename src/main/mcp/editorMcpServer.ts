@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { formatDiagnostics, type DiagnosticsByPath } from '@lookingglass/shared/diagnostics'
 import type { GitStatus, WorkspaceInfo } from '@lookingglass/shared/ipc'
 import { registerBrowserTools, type BrowserToolDeps } from '../browser/browserTools'
-import type { EditorState } from '../editor/EditorState'
+import type { EditorState } from '@lookingglass/workspace'
 
 export interface EditorMcpDeps {
   workspace(): WorkspaceInfo | null

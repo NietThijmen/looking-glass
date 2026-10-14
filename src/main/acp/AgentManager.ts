@@ -10,12 +10,11 @@ import type {
   PromptResult,
   SessionHistory,
 } from '@lookingglass/shared/agent'
-import type { EditorState } from '../editor/EditorState'
+import type { EditorState, WorkspaceService } from '@lookingglass/workspace'
 import type { EditorMcpHandle } from '../mcp/editorMcpServer'
 import type { PermissionService } from '../permissions/PermissionService'
 import type { ReviewService } from '../review/ReviewService'
 import type { AgentTerminals } from '../terminal/AgentTerminals'
-import type { WorkspaceService } from '../workspace/WorkspaceService'
 import { AcpClient } from './AcpClient'
 import { summarize, type AgentDefinition } from './definition'
 

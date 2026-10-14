@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { listFiles } from '../workspace/search'
+import { listFiles } from '@lookingglass/workspace'
 
 /**
  * Map something a page reports (a dev-server URL, a file:// URL, an absolute

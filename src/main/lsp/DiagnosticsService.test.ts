@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Diagnostic } from '@lookingglass/shared/diagnostics'
 import { formatDiagnostics } from '@lookingglass/shared/diagnostics'
-import { WorkspaceService } from '../workspace/WorkspaceService'
+import { WorkspaceService } from '@lookingglass/workspace'
 import { DiagnosticsService, languageId } from './DiagnosticsService'
 
 let tmp: string

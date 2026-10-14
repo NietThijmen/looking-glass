@@ -3,10 +3,13 @@ import type { FsChange, WorkspaceInfo } from '@lookingglass/shared/ipc'
 import { isSmokeTest } from '../env'
 import { saveAppState } from '../state/appState'
 import { TerminalService } from '../terminal/TerminalService'
-import { GitService } from '../workspace/git'
-import { listFiles, SearchService } from '../workspace/search'
-import { watchWorkspace } from '../workspace/watcher'
-import { WorkspaceService } from '../workspace/WorkspaceService'
+import {
+  GitService,
+  listFiles,
+  SearchService,
+  watchWorkspace,
+  WorkspaceService,
+} from '@lookingglass/workspace'
 import { broadcast } from './broadcast'
 import { handle } from './typed'
 

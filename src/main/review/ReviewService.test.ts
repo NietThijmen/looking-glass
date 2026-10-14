@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ReviewEntry } from '@lookingglass/shared/review'
-import { WorkspaceService } from '../workspace/WorkspaceService'
+import { WorkspaceService } from '@lookingglass/workspace'
 import { Checkpoints } from './Checkpoints'
 import { ReviewService } from './ReviewService'
 
