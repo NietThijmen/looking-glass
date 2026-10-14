@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./childEnv": "./src/childEnv.ts",
+    "./mcpConfig": "./src/mcpConfig.ts",
+    "./registry": "./src/registry.ts"
   },
   "dependencies": {
     "@lookingglass/shared": "workspace:*",

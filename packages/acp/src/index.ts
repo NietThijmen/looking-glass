@@ -1,1 +1,5 @@
-export {}
+export { AcpClient, type AcpClientHost, type AgentProcessSpec } from './AcpClient'
+export { AgentManager, sliceLines, type AgentManagerDeps } from './AgentManager'
+export { summarize, type AgentDefinition } from './definition'
+export type { EditorBuffers, FileHost, McpHost, ReviewHost, TerminalHost } from './hosts'
+export { DEFAULT_POLICY, PermissionService, type PermissionPolicy } from './PermissionService'

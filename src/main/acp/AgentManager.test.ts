@@ -6,16 +6,14 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentStatus, PermissionRequest } from '@lookingglass/shared/agent'
 import type { ReviewEntry } from '@lookingglass/shared/review'
+import { AgentManager, type AgentDefinition, PermissionService } from '@lookingglass/acp'
 import { Checkpoints, ReviewService } from '@lookingglass/review'
 import { EditorState, WorkspaceService } from '@lookingglass/workspace'
-import { PermissionService } from '../permissions/PermissionService'
 import { AgentTerminals } from '../terminal/AgentTerminals'
 import { TerminalService } from '../terminal/TerminalService'
-import { AgentManager, sliceLines } from './AgentManager'
-import type { AgentDefinition } from './definition'
 
 // Node 24 runs the TypeScript fake agent directly (type stripping).
-const fakeAgentPath = fileURLToPath(new URL('./fakeAgent.ts', import.meta.url))
+const fakeAgentPath = fileURLToPath(new URL('../../../packages/acp/src/fakeAgent.ts', import.meta.url))
 const definition = (args: string[] = []): AgentDefinition => ({
   id: 'fake',
   label: 'Fake',
@@ -93,15 +91,6 @@ afterEach(async () => {
   terminalService?.killAll()
   await fs.rm(tmp, { recursive: true, force: true })
   await fs.rm(`${tmp}-storage`, { recursive: true, force: true })
-})
-
-describe('sliceLines', () => {
-  it('slices 1-based line windows', () => {
-    expect(sliceLines('a\nb\nc', 2, 1)).toBe('b')
-    expect(sliceLines('a\nb\nc', 2)).toBe('b\nc')
-    expect(sliceLines('a\nb\nc', null, 2)).toBe('a\nb')
-    expect(sliceLines('a\nb\nc')).toBe('a\nb\nc')
-  })
 })
 
 describe('AgentManager with the fake agent', () => {

@@ -61,6 +61,7 @@
   },
   "private": true,
   "dependencies": {
+    "@lookingglass/acp": "workspace:*",
     "@lookingglass/review": "workspace:*",
     "@lookingglass/shared": "workspace:*",
     "@lookingglass/workspace": "workspace:*",

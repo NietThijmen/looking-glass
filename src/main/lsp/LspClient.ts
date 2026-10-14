@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { childEnv } from '../childEnv'
+import { childEnv } from '@lookingglass/acp/childEnv'
 
 export interface LspProcessSpec {
   command: string
