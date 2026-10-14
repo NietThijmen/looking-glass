@@ -1,0 +1,5 @@
+export { EditorState } from './EditorState'
+export { GitService, parseGitLog, parsePorcelainV2 } from './git'
+export { MAX_MATCHES, SearchService, buildRgArgs, collectRgLine, listFiles, quickFind } from './search'
+export { watchWorkspace, type WatchHandlers } from './watcher'
+export { MAX_FILE_BYTES, WorkspaceError, WorkspaceService, toRelative } from './WorkspaceService'

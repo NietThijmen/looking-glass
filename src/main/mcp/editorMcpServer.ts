@@ -4,10 +4,10 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { z } from 'zod'
-import { formatDiagnostics, type DiagnosticsByPath } from '../../shared/diagnostics'
-import type { GitStatus, WorkspaceInfo } from '../../shared/ipc'
+import { formatDiagnostics, type DiagnosticsByPath } from '@lookingglass/shared/diagnostics'
+import type { GitStatus, WorkspaceInfo } from '@lookingglass/shared/ipc'
 import { registerBrowserTools, type BrowserToolDeps } from '../browser/browserTools'
-import type { EditorState } from '../editor/EditorState'
+import type { EditorState } from '@lookingglass/workspace'
 
 export interface EditorMcpDeps {
   workspace(): WorkspaceInfo | null

@@ -2,7 +2,7 @@ import { rgPath as bundledRgPath } from '@vscode/ripgrep'
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import readline from 'node:readline'
-import type { SearchFileResult, SearchQuery, SearchResult } from '../../shared/ipc'
+import type { SearchFileResult, SearchQuery, SearchResult } from '@lookingglass/shared/ipc'
 
 export const MAX_MATCHES = 2000
 const MAX_LINE_CHARS = 300

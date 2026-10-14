@@ -5,7 +5,7 @@ import {
   type ConsoleEntry,
   type Picked,
   type PickedElement,
-} from '../../../shared/browser'
+} from '@lookingglass/shared/browser'
 import type { Attachment, AttachmentPart } from '../store/agents'
 import { useWorkspace } from '../store/workspace'
 

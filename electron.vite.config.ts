@@ -14,14 +14,24 @@ const outDir = (mode: string, part: string): string | undefined =>
 export default defineConfig(({ mode }) => ({
   main: {
     build: {
+      // Bundle workspace packages. Their exports point at TypeScript source, which
+      // Node cannot load if electron-vite leaves the dependency external.
+      externalizeDeps: {
+        exclude: [
+          '@lookingglass/shared',
+          '@lookingglass/workspace',
+          '@lookingglass/review',
+          '@lookingglass/acp',
+        ],
+      },
       outDir: outDir(mode, 'main'),
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
           // Separate process: the scriptable ACP agent used by smoke runs and dev.
-          fakeAgent: resolve('src/main/acp/fakeAgent.ts'),
+          fakeAgent: resolve('packages/acp/src/fakeAgent.ts'),
           // Runs agent scripts with Electron's Node without leaking ELECTRON_RUN_AS_NODE.
-          nodeBootstrap: resolve('src/main/acp/nodeBootstrap.ts'),
+          nodeBootstrap: resolve('packages/acp/src/nodeBootstrap.ts'),
         },
       },
     },

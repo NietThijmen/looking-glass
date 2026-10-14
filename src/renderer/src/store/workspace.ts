@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { DirEntry, FsChange, GitStatus, GitStatusEntry, WorkspaceInfo } from '../../../shared/ipc'
+import type { DirEntry, FsChange, GitStatus, GitStatusEntry, WorkspaceInfo } from '@lookingglass/shared/ipc'
 import { ancestors, dirname } from '../lib/paths'
 
 interface WorkspaceStore {

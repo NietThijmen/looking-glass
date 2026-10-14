@@ -1,0 +1,17 @@
+{
+  "name": "@lookingglass/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./agent": "./src/agent.ts",
+    "./browser": "./src/browser.ts",
+    "./diagnostics": "./src/diagnostics.ts",
+    "./ipc": "./src/ipc.ts",
+    "./review": "./src/review.ts",
+    "./settings": "./src/settings.ts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "1.8.0"
+  }
+}

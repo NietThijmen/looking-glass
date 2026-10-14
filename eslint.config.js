@@ -4,7 +4,7 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['**/out/', '**/out-smoke/', 'dist/', 'release/', 'node_modules/'] },
+  { ignores: ['**/out/', '**/out-smoke/', '**/dist/', 'release/', 'node_modules/'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -16,7 +16,14 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/main/**/*.ts', 'src/preload/**/*.ts', 'scripts/**/*.mjs', '*.config.ts', '*.config.js'],
+    files: [
+      'src/main/**/*.ts',
+      'src/preload/**/*.ts',
+      'packages/**/*.ts',
+      'scripts/**/*.mjs',
+      '*.config.ts',
+      '*.config.js',
+    ],
     languageOptions: { globals: globals.node },
   },
   {
@@ -36,6 +43,23 @@ export default tseslint.config(
         },
       ],
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+    },
+  },
+  {
+    // Shared is bundled into the sandboxed preload, so it cannot touch Node.
+    files: ['packages/shared/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['node:*'],
+              message: 'Shared is bundled into the sandboxed preload and cannot use Node modules.',
+            },
+          ],
+        },
+      ],
     },
   },
 )

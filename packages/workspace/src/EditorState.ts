@@ -1,4 +1,4 @@
-import type { EditorSnapshot } from '../../shared/agent'
+import type { EditorSnapshot } from '@lookingglass/shared/agent'
 
 /**
  * Main's copy of what the editor has open, pushed by the renderer. Agent file

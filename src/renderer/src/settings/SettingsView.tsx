@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { MenuCommand } from '../../../shared/ipc'
+import type { MenuCommand } from '@lookingglass/shared/ipc'
 import {
   acceleratorFromEvent,
   COMMANDS,
@@ -7,7 +7,7 @@ import {
   keyFor,
   type CustomAgentConfig,
   type ThemeSetting,
-} from '../../../shared/settings'
+} from '@lookingglass/shared/settings'
 import { useAgents } from '../store/agents'
 import { useSettings } from '../store/settings'
 import { Icon, Plus, X, iconSize } from '../ui/icon'

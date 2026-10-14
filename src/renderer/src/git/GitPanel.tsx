@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { GitStatusEntry } from '../../../shared/ipc'
+import type { GitStatusEntry } from '@lookingglass/shared/ipc'
 import { gitColor, gitLetter } from '../lib/gitColors'
 import { basename, dirname } from '../lib/paths'
 import { useEditor } from '../store/editor'

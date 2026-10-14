@@ -1,5 +1,11 @@
 import { ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron'
-import type { EventChannel, EventContract, InvokeArgs, InvokeChannel, InvokeResult } from '../../shared/ipc'
+import type {
+  EventChannel,
+  EventContract,
+  InvokeArgs,
+  InvokeChannel,
+  InvokeResult,
+} from '@lookingglass/shared/ipc'
 import { rendererOrigin } from '../env'
 import { hasOrigin } from '../security/paths'
 

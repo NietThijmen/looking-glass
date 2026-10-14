@@ -1,4 +1,4 @@
-import type { EditorSnapshot } from '../../../shared/agent'
+import type { EditorSnapshot } from '@lookingglass/shared/agent'
 import { isDirty, useEditor } from '../store/editor'
 
 const DEBOUNCE_MS = 150

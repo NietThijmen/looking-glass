@@ -1,4 +1,4 @@
-import type { AgentSummary } from '../../shared/agent'
+import type { AgentSummary } from '@lookingglass/shared/agent'
 
 export interface AgentDefinition {
   id: string

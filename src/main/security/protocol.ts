@@ -2,7 +2,7 @@ import { net, protocol } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { APP_HOST, APP_SCHEME } from '../env'
 import { productionCsp } from './csp'
-import { resolveInside } from './paths'
+import { resolveInside } from '@lookingglass/workspace/paths'
 
 /** Must run before `app.whenReady()`. */
 export function registerAppScheme(): void {

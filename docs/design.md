@@ -400,53 +400,37 @@ While an agent is driving a tab, the tab shows an **"Agent is using this tab"** 
 
 ---
 
-## Proposed repo layout
+## Repo layout
+
+Internal pnpm workspace. Nothing here is published. The Electron app stays the root package (`lookingglass`) and is the only package that imports Electron. `shared` has no Node imports, so the sandboxed preload can bundle it. `review/hunks` is a separate export so the renderer never loads the Node review entry.
 
 ```
 lookingglass/
-├── package.json
-├── electron.vite.config.ts
+├── package.json                     # Electron app; pnpm dev / check / smoke / package
+├── pnpm-workspace.yaml              # packages/* and the install-script allowBuilds list
+├── electron.vite.config.ts          # main, preload, renderer; fakeAgent and nodeBootstrap entries
+├── electron-builder.yml
+├── packages/
+│   ├── shared/                      # IPC contract and domain types
+│   │   └── src/                     # agent, browser, diagnostics, ipc, review, settings
+│   ├── workspace/                   # files, git, search, watcher, editor buffers, resolveInside
+│   ├── review/                      # Checkpoints, ReviewService; ./hunks is renderer-safe
+│   └── acp/                         # client, manager, permissions, registry, fake agent, bootstrap
 ├── src/
-│   ├── main/
+│   ├── main/                        # Electron composition root
 │   │   ├── index.ts                 # app lifecycle, windows
-│   │   ├── ipc/                     # typed IPC handlers (one file per domain)
-│   │   ├── acp/
-│   │   │   ├── AcpClient.ts         # one agent process + client handlers
-│   │   │   ├── AgentManager.ts
-│   │   │   ├── registry.ts          # built-in + user agent definitions
-│   │   │   └── handlers/            # fs.ts, terminal.ts, permission.ts
-│   │   ├── workspace/
-│   │   │   ├── WorkspaceService.ts  # path confinement, read/write
-│   │   │   ├── BufferRegistry.ts
-│   │   │   ├── PendingEdits.ts
-│   │   │   ├── Checkpoints.ts
-│   │   │   ├── watcher.ts
-│   │   │   ├── search.ts
-│   │   │   └── git.ts
-│   │   ├── terminal/TerminalService.ts
-│   │   ├── browser/
-│   │   │   ├── BrowserService.ts    # WebContentsViews, partitions, bounds sync
-│   │   │   ├── cdp.ts               # typed wrapper around webContents.debugger
-│   │   │   ├── picker.ts            # inspect mode, multi-select, context collection
-│   │   │   ├── sourceResolver.ts    # framework metadata, data-lg-source, source maps, rg
-│   │   │   ├── capture.ts           # console, exceptions, network errors
-│   │   │   └── isolated/            # scripts run in the page's isolated world
-│   │   ├── permissions/PermissionService.ts
-│   │   └── mcp/editorMcpServer.ts   # built-in MCP tools for agents (editor + browser_*)
+│   │   ├── ipc/                     # typed handlers; builds the real services and passes them in
+│   │   ├── acp/registry.ts          # isPackaged, execPath, unpacked Claude binary path
+│   │   ├── security/                # hardening, protocol, csp, hasOrigin
+│   │   ├── browser/                 # WebContentsView, CDP, picker, source maps
+│   │   ├── terminal/                # node-pty (an app dependency, so asarUnpack can see it)
+│   │   ├── lsp/
+│   │   ├── mcp/editorMcpServer.ts
+│   │   └── state/                   # reads app.getPath
 │   ├── preload/
 │   │   └── index.ts                 # contextBridge API, the only renderer↔main surface
-│   ├── renderer/                    # index.html, code lives in renderer/src/
-│   │   ├── App.tsx
-│   │   ├── editor/                  # @pierre/diffs setup, tabs, diff + review views
-│   │   ├── agent/                   # chat panel, tool-call cards, plan, input w/ @-mentions
-│   │   ├── browser/                 # browser tab chrome, device toolbar, console panel, element chips
-│   │   ├── explorer/  search/  git/  terminal/  settings/
-│   │   └── store/
-│   └── shared/
-│       └── ipc-types.ts             # IPC contract shared by main, preload and renderer
-├── packages/
-│   └── fake-agent/                  # scriptable ACP agent for tests
-└── e2e/
+│   └── renderer/                    # React UI
+└── scripts/
 ```
 
 ---
@@ -584,16 +568,16 @@ The workflow runs `pnpm check`, creates a draft release with generated notes, bu
 
 ### How the skeleton is wired
 
-- **IPC contract**: every channel is declared once in `src/shared/ipc.ts`. Main registers handlers with the typed `handle()` in `src/main/ipc/typed.ts`, which rejects calls from any frame that isn't the app's own renderer. The preload builds a domain-shaped `window.lookingglass` API from those channels. There is no generic `invoke` passthrough.
+- **IPC contract**: every channel is declared once in `packages/shared/src/ipc.ts`. Main registers handlers with the typed `handle()` in `src/main/ipc/typed.ts`, which rejects calls from any frame that isn't the app's own renderer. The preload builds a domain-shaped `window.lookingglass` API from those channels. There is no generic `invoke` passthrough.
 - **Adding a channel**: add it to `InvokeContract` or `EventContract`, add the method to `LookingglassApi`, implement it in `src/preload/index.ts`, and register a handler in `src/main/ipc/`. The typechecker flags any step you miss.
 - **Security defaults**: sandboxed renderer, context isolation, no Node in the renderer, a strict CSP, all permission requests denied, `window.open` and `<webview>` blocked, and navigation locked to the app origin (`src/main/security/`). Packaged builds serve the renderer from `app://lookingglass/` through a protocol handler confined to the build folder, not from `file://`.
 - **Dependencies**: anything that ends up bundled into the renderer or preload (React, Zustand, …) goes in `devDependencies`, which keeps it out of the packaged `app.asar`. Only native or main-process runtime modules belong in `dependencies`.
-- **`pnpm-workspace.yaml`**: `allowBuilds` lists which packages may run install scripts.
+- **`pnpm-workspace.yaml`**: lists `packages/*` and the `allowBuilds` install-script allowlist.
 - **Native modules**: `node-pty` and `@parcel/watcher` use N-API prebuilds, so no Electron rebuild is needed. `scripts/fix-node-pty.mjs` (run on `postinstall`) restores the execute bit on node-pty's `spawn-helper`, which pnpm drops; without it every terminal fails with `posix_spawnp failed`. Packaged builds unpack ripgrep and node-pty from the asar (`electron-builder.yml`).
 
 ### How the editor shell is wired
 
-- **Workspace access** goes through `WorkspaceService` (`src/main/workspace/`), which confines every path to the workspace root, including through symlinks. The ACP `fs/*` handlers in Phase 2 will reuse it.
+- **Workspace access** goes through `WorkspaceService` (`packages/workspace`), which confines every path to the workspace root, including through symlinks. The ACP `fs/*` handlers reuse it.
 - **Buffers** live in the renderer's editor store: `saved` (disk), `draft` (editor) and `base` (what the editor was mounted with). Dirty means `draft !== saved`. A file changed on disk reloads silently when clean and shows a conflict banner when dirty.
 - **Editor**: `@pierre/diffs` `File` in edit mode, keyed by path and disk version so undo history survives tab switches. Paste goes through the main-process clipboard because the sandboxed renderer has no clipboard-read permission.
 - **Terminal**: `ghostty-web` in the renderer, `node-pty` in main. Output is batched every 8 ms; a small bus buffers output that arrives before a view attaches.
@@ -602,17 +586,17 @@ The workflow runs `pnpm check`, creates a draft release with generated notes, bu
 
 ### How the agent side is wired
 
-- **One process per agent**, shared by all its chats (`src/main/acp/`). `AcpClient` wraps the ACP SDK over stdio; `AgentManager` starts agents lazily, restarts them on next use after a crash, and stops them all when the workspace changes (sessions are bound to a folder).
+- **One process per agent**, shared by all its chats (`packages/acp`). `AcpClient` wraps the ACP SDK over stdio; `AgentManager` starts agents lazily, restarts them on next use after a crash, and stops them all when the workspace changes (sessions are bound to a folder). It talks to files, buffers, review, terminals and the editor MCP server through host interfaces the app passes in.
 - **Agent file reads** (`fs/read_text_file`) return unsaved editor contents first (the renderer publishes a snapshot of open and dirty files), then disk, always through `WorkspaceService`. Absolute agent paths are mapped into the workspace, including `/tmp` vs `/private/tmp` style spellings; anything outside is refused.
-- **Agent file writes** go to disk and into review (`src/main/review/`): `Checkpoints` is the shadow git repo, `ReviewService` keeps baselines, and the renderer's `review/hunks.ts` does per-hunk keep/undo by rebuilding text from diff segments.
+- **Agent file writes** go to disk and into review (`packages/review`): `Checkpoints` is the shadow git repo, `ReviewService` keeps baselines, and `@lookingglass/review/hunks` does per-hunk keep/undo by rebuilding text from diff segments.
 - **Agent terminals** (`src/main/terminal/AgentTerminals.ts`): `terminal/create` runs the command in a real pty that appears as a tab in the terminal panel; the agent gets plain text (ANSI stripped, tail kept within `outputByteLimit`).
-- **Permissions**: `PermissionService` answers read/search/think requests with the agent's "allow once" option and asks the user for everything else. Stop answers open requests with `cancelled`, as ACP requires.
+- **Permissions**: `PermissionService` (`packages/acp`) answers read/search/think requests with the agent's "allow once" option and asks the user for everything else. Stop answers open requests with `cancelled`, as ACP requires.
 - **Login**: if `session/new` fails with `auth_required`, the chat shows the agent's auth methods. Terminal methods run in a Lookingglass terminal tab; the user retries when done.
 - **Editor MCP server**: a Streamable HTTP MCP server on 127.0.0.1 with a random bearer token, passed to every session whose agent supports HTTP MCP. Tools: `get_workspace_info`, `get_open_editors`, `get_git_status`, `open_file`, `get_diagnostics`, and `browser_*` (see `src/main/browser/browserTools.ts`).
 - **Browser**: `BrowserService` (`src/main/browser/`) owns `WebContentsView` tabs in a `persist:lookingglass-browser` partition; the renderer reserves layout and syncs bounds over IPC. Picking uses CDP inspect mode (`elementContext.ts`); dev-server URLs are detected in `terminalBus.ts`. Smoke covers console capture, picking, MCP `browser_snapshot` / `browser_click`, and opening a detected local URL.
 - **Diagnostics**: `DiagnosticsService` (`src/main/lsp/`) runs `typescript-language-server` with Electron's Node and the workspace's own `typescript` (no TypeScript is bundled, so a folder without it gets no diagnostics). It keeps the server's documents in step with the editor's open TS/JS files, unsaved edits included, and with disk changes. Results become editor markers, `@problems`, and the `get_diagnostics` MCP tool, which can also open a file just to check it.
-- **Settings**: app preferences live in `settings.json` in the app's userData folder (`src/main/state/settings.ts`). The theme sets Electron's `nativeTheme`, and the renderer, `@pierre/diffs`, the file tree and the terminal all follow `prefers-color-scheme`. Keybindings are Electron accelerators that override the defaults in `src/shared/settings.ts`; the app menu is rebuilt when they change. Custom agents are read from and written to `~/.lookingglass/agents.json` (`LOOKINGGLASS_HOME` moves it). Smoke runs use a throwaway userData folder and agents file.
-- **Fake agent** (`src/main/acp/fakeAgent.ts`): a scriptable ACP agent used by unit tests and smoke runs, and offered in dev builds. Prompts `read <path>`, `edit`, `slow` and anything else exercise reads, permissions, cancel and streaming.
+- **Settings**: app preferences live in `settings.json` in the app's userData folder (`src/main/state/settings.ts`). The theme sets Electron's `nativeTheme`, and the renderer, `@pierre/diffs`, the file tree and the terminal all follow `prefers-color-scheme`. Keybindings are Electron accelerators that override the defaults in `packages/shared/src/settings.ts`; the app menu is rebuilt when they change. Custom agents are read from and written to `~/.lookingglass/agents.json` (`LOOKINGGLASS_HOME` moves it). Smoke runs use a throwaway userData folder and agents file.
+- **Fake agent** (`packages/acp/src/fakeAgent.ts`): a scriptable ACP agent used by unit tests and smoke runs, and offered in dev builds. Prompts `read <path>`, `edit`, `slow` and anything else exercise reads, permissions, cancel and streaming.
 - **Real-agent smoke**: `LOOKINGGLASS_SMOKE_CLAUDE=1 pnpm smoke` (or `smoke:packaged`) also runs one real Claude Code turn. It needs a logged-in `claude` and uses a few tokens.
 
 To try a real agent you need its CLI logged in first, for example `claude` for Claude Code.

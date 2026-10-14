@@ -1,14 +1,14 @@
 import { app, nativeTheme } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import type { MenuCommand } from '../../shared/ipc'
+import type { MenuCommand } from '@lookingglass/shared/ipc'
 import {
   COMMANDS,
   DEFAULT_SETTINGS,
   isValidAccelerator,
   type ThemeSetting,
   type UserSettings,
-} from '../../shared/settings'
+} from '@lookingglass/shared/settings'
 
 const file = (): string => path.join(app.getPath('userData'), 'settings.json')
 const THEMES: ThemeSetting[] = ['dark', 'light', 'system']

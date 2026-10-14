@@ -7,9 +7,15 @@
   "include": [
     "src/main/**/*",
     "src/preload/**/*",
-    "src/shared/**/*",
     "electron.vite.config.ts",
     "vitest.config.ts",
     "eslint.config.js"
+  ],
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/workspace" },
+    { "path": "./packages/review" },
+    { "path": "./packages/review/tsconfig.hunks.json" },
+    { "path": "./packages/acp" }
   ]
 }

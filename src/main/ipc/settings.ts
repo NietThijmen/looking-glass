@@ -1,4 +1,4 @@
-import { readCustomAgents, writeCustomAgents, agentsFile } from '../acp/registry'
+import { agentsFile, readCustomAgents, writeCustomAgents } from '@lookingglass/acp/registry'
 import { installMenu } from '../menu'
 import { saveSettings, settings } from '../state/settings'
 import { broadcast } from './broadcast'

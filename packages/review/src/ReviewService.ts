@@ -1,5 +1,5 @@
-import type { ReviewEntry } from '../../shared/review'
-import type { WorkspaceService } from '../workspace/WorkspaceService'
+import type { ReviewEntry } from '@lookingglass/shared/review'
+import type { WorkspaceService } from '@lookingglass/workspace'
 import type { Checkpoints } from './Checkpoints'
 
 const COLLECT_DEBOUNCE_MS = 400

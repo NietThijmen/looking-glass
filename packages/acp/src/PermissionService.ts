@@ -1,5 +1,5 @@
 import type { RequestPermissionRequest, RequestPermissionResponse, ToolKind } from '@agentclientprotocol/sdk'
-import type { PermissionReply, PermissionRequest } from '../../shared/agent'
+import type { PermissionReply, PermissionRequest } from '@lookingglass/shared/agent'
 
 export interface PermissionPolicy {
   /** Tool kinds answered with the agent's "allow once" option without asking. */

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Chevron } from '../ui/icon'
-import type { SearchMatch, SearchQuery, SearchResult } from '../../../shared/ipc'
+import type { SearchMatch, SearchQuery, SearchResult } from '@lookingglass/shared/ipc'
 import { basename, dirname } from '../lib/paths'
 import { useEditor } from '../store/editor'
 import { useUi } from '../store/ui'

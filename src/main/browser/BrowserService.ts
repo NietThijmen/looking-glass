@@ -8,7 +8,7 @@ import type {
   PickedElement,
   PickedRegion,
   PickMode,
-} from '../../shared/browser'
+} from '@lookingglass/shared/browser'
 import { Cdp } from './cdp'
 import { collectElement, type ContextDeps } from './elementContext'
 import { REGION_CANCEL, REGION_SCRIPT, REGION_WORLD } from './regionScript'

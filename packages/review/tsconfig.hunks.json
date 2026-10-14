@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "outDir": "dist/hunks",
+    "rootDir": "src",
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": ["src/hunks.ts", "src/hunks.test.ts"]
+}

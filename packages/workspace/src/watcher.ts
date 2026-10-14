@@ -1,5 +1,5 @@
 import watcher, { type AsyncSubscription } from '@parcel/watcher'
-import type { FsChange } from '../../shared/ipc'
+import type { FsChange } from '@lookingglass/shared/ipc'
 import { toRelative } from './WorkspaceService'
 
 export interface WatchHandlers {

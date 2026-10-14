@@ -1,8 +1,8 @@
 import os from 'node:os'
 import path from 'node:path'
 import { spawn, type IPty } from 'node-pty'
-import type { TerminalCreateOptions, TerminalInfo } from '../../shared/ipc'
-import { childEnv } from '../childEnv'
+import type { TerminalCreateOptions, TerminalInfo } from '@lookingglass/shared/ipc'
+import { childEnv } from '@lookingglass/acp/childEnv'
 
 const FLUSH_MS = 8
 

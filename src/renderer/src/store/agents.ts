@@ -8,7 +8,7 @@ import type {
   ContentBlock,
   PermissionRequest,
   SessionUpdate,
-} from '../../../shared/agent'
+} from '@lookingglass/shared/agent'
 import { applyUpdate, notice, turnEnd, userItem, type TranscriptItem } from '../agent/transcript'
 import { agentTabPath, tabId, useEditor } from './editor'
 import { useUi } from './ui'

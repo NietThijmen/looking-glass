@@ -9,29 +9,25 @@ import type {
   NewSessionResult,
   PromptResult,
   SessionHistory,
-} from '../../shared/agent'
-import type { EditorState } from '../editor/EditorState'
-import type { EditorMcpHandle } from '../mcp/editorMcpServer'
-import type { PermissionService } from '../permissions/PermissionService'
-import type { ReviewService } from '../review/ReviewService'
-import type { AgentTerminals } from '../terminal/AgentTerminals'
-import type { WorkspaceService } from '../workspace/WorkspaceService'
+} from '@lookingglass/shared/agent'
+import type { EditorBuffers, FileHost, McpHost, ReviewHost, TerminalHost } from './hosts'
+import type { PermissionService } from './PermissionService'
 import { AcpClient } from './AcpClient'
 import { summarize, type AgentDefinition } from './definition'
 
 export interface AgentManagerDeps {
   definitions(): Promise<AgentDefinition[]>
-  workspace: WorkspaceService
-  editor: EditorState
+  workspace: FileHost
+  editor: EditorBuffers
   permissions: PermissionService
-  mcp(): EditorMcpHandle | null
+  mcp(): McpHost | null
   /** The workspace's own MCP servers, once the user has allowed them. */
   workspaceMcpServers?(): Promise<McpServer[]>
   onStatus(agentId: string, status: AgentStatus): void
   onSessionUpdate(notification: SessionNotification): void
   /** Optional so tests can run without them. */
-  review?: Pick<ReviewService, 'beginTurn' | 'endTurn' | 'recordAgentWrite'>
-  terminals?: AgentTerminals
+  review?: ReviewHost
+  terminals?: TerminalHost
   /** An agent wrote `path` through ACP (its contents already include any unsaved edits it read). */
   onAgentWrite?(path: string): void
 }
@@ -58,7 +54,7 @@ interface RunningAgent {
 /**
  * Owns agent processes (one per agent, shared by all its sessions) and routes
  * sessions to them. Agents are started lazily and restarted on next use after
- * they exit. All file access from agents goes through the WorkspaceService.
+ * they exit. All file access from agents goes through the file host.
  */
 export class AgentManager {
   #running = new Map<string, RunningAgent>()
@@ -227,7 +223,7 @@ export class AgentManager {
     throw error
   }
 
-  #requireTerminals(): AgentTerminals {
+  #requireTerminals(): TerminalHost {
     if (!this.deps.terminals) throw RequestError.methodNotFound('terminal/create')
     return this.deps.terminals
   }

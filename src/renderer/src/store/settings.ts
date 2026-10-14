@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { MenuCommand } from '../../../shared/ipc'
-import { DEFAULT_SETTINGS, formatAccelerator, keyFor, type UserSettings } from '../../../shared/settings'
+import type { MenuCommand } from '@lookingglass/shared/ipc'
+import { DEFAULT_SETTINGS, formatAccelerator, keyFor, type UserSettings } from '@lookingglass/shared/settings'
 
 interface SettingsStore {
   settings: UserSettings

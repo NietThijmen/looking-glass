@@ -1,6 +1,6 @@
 import { app, BrowserWindow, Menu, type MenuItemConstructorOptions } from 'electron'
-import type { MenuCommand } from '../shared/ipc'
-import { COMMANDS, keyFor } from '../shared/settings'
+import type { MenuCommand } from '@lookingglass/shared/ipc'
+import { COMMANDS, keyFor } from '@lookingglass/shared/settings'
 import { settings } from './state/settings'
 import { updateMenuItems } from './updater'
 import { send } from './ipc/typed'

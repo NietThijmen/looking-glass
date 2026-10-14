@@ -1,0 +1,15 @@
+{
+  "name": "@lookingglass/workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./paths": "./src/paths.ts"
+  },
+  "dependencies": {
+    "@lookingglass/shared": "workspace:*",
+    "@parcel/watcher": "^2.6.0",
+    "@vscode/ripgrep": "^1.18.0"
+  }
+}

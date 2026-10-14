@@ -1,6 +1,6 @@
 import type { PermissionOption, RequestPermissionRequest } from '@agentclientprotocol/sdk'
 import { describe, expect, it } from 'vitest'
-import type { PermissionRequest } from '../../shared/agent'
+import type { PermissionRequest } from '@lookingglass/shared/agent'
 import { PermissionService } from './PermissionService'
 
 const options: PermissionOption[] = [

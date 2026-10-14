@@ -213,6 +213,18 @@ importers:
       '@agentclientprotocol/sdk':
         specifier: 1.8.0
         version: 1.8.0(zod@4.6.6)
+      '@lookingglass/acp':
+        specifier: workspace:*
+        version: link:packages/acp
+      '@lookingglass/review':
+        specifier: workspace:*
+        version: link:packages/review
+      '@lookingglass/shared':
+        specifier: workspace:*
+        version: link:packages/shared
+      '@lookingglass/workspace':
+        specifier: workspace:*
+        version: link:packages/workspace
       '@modelcontextprotocol/sdk':
         specifier: 1.32.1
         version: 1.32.1(supports-color@7.2.0)(zod@4.6.6)
@@ -319,6 +331,48 @@ importers:
       zustand:
         specifier: 5.0.15
         version: 5.0.15(@types/react@19.3.0)(react@19.3.0)
+
+  packages/acp:
+    dependencies:
+      '@agentclientprotocol/claude-agent-acp':
+        specifier: 0.89.1
+        version: 0.89.1(@anthropic-ai/sdk@0.133.0(zod@4.6.6))(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.6))
+      '@agentclientprotocol/sdk':
+        specifier: 1.8.0
+        version: 1.8.0(zod@4.6.6)
+      '@lookingglass/shared':
+        specifier: workspace:*
+        version: link:../shared
+
+  packages/review:
+    dependencies:
+      '@lookingglass/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@lookingglass/workspace':
+        specifier: workspace:*
+        version: link:../workspace
+      diff:
+        specifier: 9.0.0
+        version: 9.0.0
+
+  packages/shared:
+    dependencies:
+      '@agentclientprotocol/sdk':
+        specifier: 1.8.0
+        version: 1.8.0(zod@4.6.6)
+
+  packages/workspace:
+    dependencies:
+      '@lookingglass/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@parcel/watcher':
+        specifier: ^2.6.0
+        version: 2.6.0
+      '@vscode/ripgrep':
+        specifier: ^1.18.0
+        version: 1.18.0
 
 packages:
 

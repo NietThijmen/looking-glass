@@ -22,7 +22,7 @@ import {
 } from '@agentclientprotocol/sdk'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { Readable, Writable } from 'node:stream'
-import { childEnv } from '../childEnv'
+import { childEnv } from './childEnv'
 
 export interface AgentProcessSpec {
   command: string

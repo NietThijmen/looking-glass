@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ReviewEntry } from '../../../shared/review'
+import type { ReviewEntry } from '@lookingglass/shared/review'
 
 interface ReviewStore {
   entries: ReviewEntry[]
