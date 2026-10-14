@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { describePicked } from '@lookingglass/shared/browser'
 import type { BrowserService } from './BrowserService'
 import type { Cdp } from './cdp'
+import { PAGE_TO_MARKDOWN } from './markdownScript'
 import type { ToolSet } from '../mcp/toolSet'
 
 export interface BrowserToolDeps {
@@ -17,6 +18,8 @@ export interface BrowserToolDeps {
 }
 
 const MAX_SNAPSHOT_LINES = 1500
+const MAX_SNAPSHOT_CHARS = 30_000
+const MAX_TEXT_CHARS = 30_000
 
 const text = (value: string) => ({ content: [{ type: 'text' as const, text: value }] })
 const image = (data: string, caption: string) => ({
@@ -82,24 +85,45 @@ interface AxNode {
   backendDOMNodeId?: number
 }
 
-/** Accessibility tree as indented text with refs the action tools accept. */
-async function snapshot(cdp: Cdp): Promise<string> {
-  const { nodes } = await cdp.send<{ nodes: AxNode[] }>('Accessibility.getFullAXTree')
+/**
+ * Accessibility tree as indented text with refs the action tools accept. With
+ * `ref` only that element's subtree is returned. Output is capped by lines and
+ * characters, and says so when it is cut.
+ */
+async function snapshot(cdp: Cdp, ref?: number): Promise<string> {
+  const { nodes } = await cdp.send<{ nodes: AxNode[] }>(
+    ref === undefined ? 'Accessibility.getFullAXTree' : 'Accessibility.getPartialAXTree',
+    ref === undefined ? undefined : { backendNodeId: ref, fetchRelatives: false },
+  )
   const byId = new Map(nodes.map((n) => [n.nodeId, n]))
   const lines: string[] = []
-  const skip = new Set(['none', 'generic', 'InlineTextBox', 'LineBreak'])
+  // Text boxes and line breaks only repeat their StaticText parent.
+  const skip = new Set(['none', 'generic'])
+  const noise = new Set(['InlineTextBox', 'LineBreak'])
+  let chars = 0
+  let truncated = false
   const walk = (node: AxNode, depth: number): void => {
-    if (lines.length >= MAX_SNAPSHOT_LINES) return
+    if (truncated) return
+    if (lines.length >= MAX_SNAPSHOT_LINES || chars >= MAX_SNAPSHOT_CHARS) {
+      truncated = true
+      return
+    }
     const role = node.role?.value ?? ''
     const name = node.name?.value ?? ''
-    const shown = !node.ignored && !(skip.has(role) && !name) && !(role === 'StaticText' && !name.trim())
+    const shown =
+      !node.ignored &&
+      !noise.has(role) &&
+      !(skip.has(role) && !name) &&
+      !(role === 'StaticText' && !name.trim())
     if (shown) {
       const value =
         node.value?.value !== undefined && node.value.value !== ''
           ? ` value=${JSON.stringify(node.value.value)}`
           : ''
-      const ref = node.backendDOMNodeId ? ` [ref=${node.backendDOMNodeId}]` : ''
-      lines.push(`${'  '.repeat(depth)}- ${role}${name ? ` "${name.slice(0, 120)}"` : ''}${value}${ref}`)
+      const nodeRef = node.backendDOMNodeId ? ` [ref=${node.backendDOMNodeId}]` : ''
+      const line = `${'  '.repeat(depth)}- ${role}${name ? ` "${name.slice(0, 120)}"` : ''}${value}${nodeRef}`
+      lines.push(line)
+      chars += line.length + 1
     }
     for (const child of node.childIds ?? []) {
       const next = byId.get(child)
@@ -108,7 +132,8 @@ async function snapshot(cdp: Cdp): Promise<string> {
   }
   const root = nodes[0]
   if (root) walk(root, 0)
-  if (lines.length >= MAX_SNAPSHOT_LINES) lines.push('… (truncated)')
+  if (truncated)
+    lines.push('… (truncated: pass `ref` of an element from this snapshot to read just that part)')
   return lines.join('\n')
 }
 
@@ -210,15 +235,52 @@ export function registerBrowserTools(tools: ToolSet, deps: BrowserToolDeps): voi
         'Read the page as an accessibility tree. Each element has a [ref=N] for browser_click, browser_hover, browser_type and browser_screenshot. Prefer it over screenshots for finding things.',
       description:
         'Accessibility tree of the page as text. Each element has a [ref=N] you can pass to browser_click, browser_type, browser_hover and browser_screenshot. Prefer this over screenshots for finding things.',
-      inputSchema: tabParam,
+      inputSchema: {
+        ...tabParam,
+        ref: refParam.optional().describe('Only snapshot this element and its children'),
+      },
     },
-    async ({ tab }) => {
+    async ({ tab, ref }) => {
       const t = browser.agentTab(tab)
       const { result } = await t.cdp.send('Runtime.evaluate', {
         expression: 'location.href',
         returnByValue: true,
       })
-      return text(`URL: ${result.value}\n${await snapshot(t.cdp)}`)
+      return text(`URL: ${result.value}\n${await snapshot(t.cdp, ref)}`)
+    },
+  )
+
+  tools.add(
+    'browser_markdown',
+    {
+      usage:
+        'Read the page, or one element by ref, as markdown: headings, lists, links with their URLs, tables. Cheaper than browser_snapshot when you only need the content, like addresses, prices or copy.',
+      description:
+        'Visible content of the page, or of one element when ref is given, as markdown with links kept. Read-only.',
+      inputSchema: { ...tabParam, ref: refParam.optional() },
+    },
+    async ({ tab, ref }) => {
+      const t = browser.agentTab(tab)
+      const { result, exceptionDetails } =
+        ref === undefined
+          ? await t.cdp.send('Runtime.evaluate', {
+              expression: `(${PAGE_TO_MARKDOWN})(document.body)`,
+              returnByValue: true,
+            })
+          : await t.cdp.send('Runtime.callFunctionOn', {
+              objectId: (await t.cdp.send('DOM.resolveNode', { backendNodeId: ref })).object.objectId,
+              functionDeclaration: `function () { return (${PAGE_TO_MARKDOWN})(this) }`,
+              returnByValue: true,
+            })
+      if (exceptionDetails)
+        return text(`Error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`)
+      const body = String(result.value ?? '').trim()
+      if (!body) return text('No visible content.')
+      return text(
+        body.length > MAX_TEXT_CHARS
+          ? `${body.slice(0, MAX_TEXT_CHARS)}\n… (truncated: pass \`ref\` of an element to read just that part)`
+          : body,
+      )
     },
   )
 
@@ -305,9 +367,9 @@ export function registerBrowserTools(tools: ToolSet, deps: BrowserToolDeps): voi
     'browser_navigate',
     {
       usage:
-        'Open a URL in a tab. localhost and the workspace preview URL open freely; any other URL asks the user first.',
+        'Open a URL in a tab and wait for it to finish loading. localhost and the workspace preview URL open freely; any other URL asks the user first.',
       description:
-        'Open a URL in the browser tab (or a new tab if none is open). Non-localhost URLs need the user to approve.',
+        'Open a URL in the browser tab (or a new tab if none is open) and wait for it to load. Non-localhost URLs need the user to approve.',
       inputSchema: { ...tabParam, url: z.string() },
     },
     async ({ tab, url }) => {
@@ -316,11 +378,13 @@ export function registerBrowserTools(tools: ToolSet, deps: BrowserToolDeps): voi
       }
       if (!tab && !browser.tabs().length) {
         const id = deps.openTab(url)
+        await browser.whenLoaded(id)
         return text(`Opened ${url} in new tab ${id}`)
       }
       const t = browser.agentTab(tab)
       browser.navigate(t.id, url)
-      return text(`Navigating ${t.id} to ${url}`)
+      await browser.whenLoaded(t.id)
+      return text(`Opened ${url} in ${t.id}`)
     },
   )
 
