@@ -10,7 +10,24 @@ Grab the latest build from [GitHub Releases](https://github.com/NietThijmen/look
 | Windows | NSIS installer | Run the `.exe` and follow the prompts.           |
 | Linux   | `.AppImage`    | `chmod +x Lookingglass-*.AppImage`, then run it. |
 
-Releases may be unsigned if the maintainer had no signing certificates available. On macOS, if Gatekeeper blocks the app, right-click it and choose **Open**, or allow it in **System Settings → Privacy & Security**. On Windows, choose **More info → Run anyway** in SmartScreen.
+Releases may be unsigned if the maintainer had no signing certificates available. On Windows, choose **More info → Run anyway** in SmartScreen. On macOS, see below.
+
+### macOS
+
+Lookingglass is not signed or notarized with an Apple Developer ID, so macOS Gatekeeper blocks it the first time with a message like _"Lookingglass is damaged"_ or _"can't be opened because Apple cannot check it for malicious software"_. The app is fine. To open it anyway:
+
+1. Drag Lookingglass to **Applications** and try to open it once (it will be blocked).
+2. Open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** next to Lookingglass. Confirm with your password.
+
+On macOS 14 and earlier you can instead right-click the app and choose **Open**.
+
+If macOS still says the app is damaged, remove the quarantine flag in a terminal:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Lookingglass.app
+```
+
+You only need to do this once per downloaded version. Only do it for builds you downloaded from this project's [GitHub Releases](https://github.com/NietThijmen/looking-glass/releases).
 
 You don't need Node installed. Claude Code ships inside the app and runs on Electron's own Node.
 
