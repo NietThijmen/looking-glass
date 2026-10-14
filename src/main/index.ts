@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import { isDev, isSmokeTest, rendererDir } from './env'
 import { registerAgentHandlers, startAgentServices, stopAgentServices } from './ipc/agent'
@@ -40,6 +41,8 @@ if (!isSmokeTest && !app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(async () => {
     applyHardening()
+    // Packaged builds get their icon from electron-builder; dev runs need it set by hand.
+    if (isDev && process.platform === 'darwin') app.dock?.setIcon(join(app.getAppPath(), 'build/icon.png'))
     if (!isDev) serveRenderer(rendererDir)
     registerAppHandlers()
     registerWorkspaceHandlers()
