@@ -1,8 +1,8 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { describePicked } from '@lookingglass/shared/browser'
 import type { BrowserService } from './BrowserService'
 import type { Cdp } from './cdp'
+import type { ToolSet } from '../mcp/toolSet'
 
 export interface BrowserToolDeps {
   browser: BrowserService
@@ -160,12 +160,14 @@ const refParam = z.number().int().describe('Element ref from browser_snapshot')
  * (or the configured preview URL) asks, interacting with such a page asks once
  * per site, and running JavaScript always asks.
  */
-export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): void {
+export function registerBrowserTools(tools: ToolSet, deps: BrowserToolDeps): void {
   const { browser } = deps
 
-  server.registerTool(
+  tools.add(
     'browser_list_tabs',
     {
+      usage:
+        'Call this first. Lists the tab ids you pass as `tab` to the other browser tools; they default to the tab the user last looked at.',
       description: 'Browser tabs open in the Lookingglass editor, with their URL and title.',
       inputSchema: {},
     },
@@ -179,9 +181,11 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_get_selection',
     {
+      usage:
+        'Use when the user says "this element" or "here". Returns what they picked with the element picker (selector, HTML, matched CSS with source files, likely source file, screenshots). Check it before searching the codebase for a component.',
       description:
         'The element(s) or page region(s) the user picked with the element picker: selector, HTML, matched CSS with source files, computed styles, likely source file, and screenshots.',
       inputSchema: {},
@@ -199,9 +203,11 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_snapshot',
     {
+      usage:
+        'Read the page as an accessibility tree. Each element has a [ref=N] for browser_click, browser_hover, browser_type and browser_screenshot. Prefer it over screenshots for finding things.',
       description:
         'Accessibility tree of the page as text. Each element has a [ref=N] you can pass to browser_click, browser_type, browser_hover and browser_screenshot. Prefer this over screenshots for finding things.',
       inputSchema: tabParam,
@@ -216,9 +222,11 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_screenshot',
     {
+      usage:
+        'See how the page looks: the viewport, the full page, or a single element (pass its ref). Use for visual checks; use browser_snapshot to find elements.',
       description:
         'Screenshot of the visible page, the whole scrollable page (fullPage), or one element when ref is given.',
       inputSchema: { ...tabParam, ref: refParam.optional(), fullPage: z.boolean().optional() },
@@ -248,9 +256,11 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_console',
     {
+      usage:
+        'Console messages, uncaught exceptions and failed requests. Use after a change or interaction to check for errors (errorsOnly narrows it).',
       description: 'Recent console messages, uncaught exceptions and failed network requests from the page.',
       inputSchema: { ...tabParam, errorsOnly: z.boolean().optional() },
     },
@@ -272,9 +282,11 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_network_errors',
     {
+      usage:
+        "Failed requests (HTTP 4xx/5xx, connection errors). Use when something doesn't load or an API call seems to fail.",
       description: 'Failed network requests (HTTP 4xx/5xx, connection errors) from the page.',
       inputSchema: tabParam,
     },
@@ -289,9 +301,11 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_navigate',
     {
+      usage:
+        'Open a URL in a tab. localhost and the workspace preview URL open freely; any other URL asks the user first.',
       description:
         'Open a URL in the browser tab (or a new tab if none is open). Non-localhost URLs need the user to approve.',
       inputSchema: { ...tabParam, url: z.string() },
@@ -310,9 +324,14 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_click',
-    { description: 'Click an element.', inputSchema: { ...tabParam, ref: refParam } },
+    {
+      usage:
+        'Click an element by ref from browser_snapshot. On pages outside localhost the user is asked once per site.',
+      description: 'Click an element.',
+      inputSchema: { ...tabParam, ref: refParam },
+    },
     async ({ tab, ref }) => {
       const t = browser.agentTab(tab)
       const declined = await interactionAllowed(deps, t.url)
@@ -325,9 +344,14 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_hover',
-    { description: 'Move the mouse over an element.', inputSchema: { ...tabParam, ref: refParam } },
+    {
+      usage:
+        'Hover an element by ref, e.g. to trigger hover styles or menus. Combine with browser_screenshot to see the result.',
+      description: 'Move the mouse over an element.',
+      inputSchema: { ...tabParam, ref: refParam },
+    },
     async ({ tab, ref }) => {
       const t = browser.agentTab(tab)
       const declined = await interactionAllowed(deps, t.url)
@@ -338,9 +362,11 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_type',
     {
+      usage:
+        'Type into an input by ref, optionally pressing Enter (submit). Same approval rule as browser_click.',
       description: 'Focus an element and type text into it, optionally pressing Enter afterwards.',
       inputSchema: { ...tabParam, ref: refParam, text: z.string(), submit: z.boolean().optional() },
     },
@@ -355,9 +381,11 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_press_key',
     {
+      usage:
+        'Press a single key such as Enter, Tab, Escape or ArrowDown. Same approval rule as browser_click.',
       description: 'Press a key (Enter, Tab, Escape, ArrowDown, a letter…).',
       inputSchema: { ...tabParam, key: z.string() },
     },
@@ -370,9 +398,11 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_resize',
     {
+      usage:
+        "Emulate a viewport such as 390×844 to check responsive layouts. Width 0 resets it, so reset when you're done.",
       description: 'Emulate a viewport size (e.g. 390×844 for a phone). Pass width 0 to reset.',
       inputSchema: { ...tabParam, width: z.number().int().min(0), height: z.number().int().min(0) },
     },
@@ -390,9 +420,11 @@ export function registerBrowserTools(server: McpServer, deps: BrowserToolDeps): 
     },
   )
 
-  server.registerTool(
+  tools.add(
     'browser_evaluate',
     {
+      usage:
+        "Run JavaScript in the page for anything the other tools can't see, like computed styles, app state or what a script does. The user must approve every call, so prefer the other tools when they do the job.",
       description:
         'Run a JavaScript expression in the page and return the result. The user must approve every call.',
       inputSchema: { ...tabParam, expression: z.string() },
