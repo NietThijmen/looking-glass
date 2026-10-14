@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="100%" r="110%">
+      <stop offset="0" stop-color="#2b2b2e"/>
+      <stop offset="1" stop-color="#0f0f11"/>
+    </radialGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9a9a9a"/>
+      <stop offset="1" stop-color="#e6e6e6"/>
+    </linearGradient>
+    <clipPath id="lens"><circle cx="440" cy="300" r="118"/></clipPath>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+
+  <!-- icon tile -->
+  <rect x="120" y="170" width="300" height="300" rx="68" fill="url(#tile)"/>
+  <circle cx="240" cy="290" r="72" fill="none" stroke="#222" stroke-width="20"/>
+  <line x1="292" y1="342" x2="356" y2="406" stroke="#222" stroke-width="20" stroke-linecap="round"/>
+
+  <!-- wordmark -->
+  <text x="480" y="300" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="104" font-weight="700" fill="#f5f5f5" letter-spacing="-2">Lookingglass</text>
+  <text x="484" y="370" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="40" font-weight="400" fill="#b8b8bc">Point at the bug. Your agent fixes it.</text>
+  <text x="484" y="430" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="400" fill="#7d7d83">Your app, your code and your coding agent in one window.</text>
+</svg>
