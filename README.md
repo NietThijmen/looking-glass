@@ -13,23 +13,6 @@
   <a href="docs/design.md">Design notes</a>
 </p>
 
-```
-┌──────────┬───────────────────────────────────────┬─────────────────────┐
-│ EXPLORER │ Hero.tsx │ 🌐 localhost:5173 ●        │ Chat · Claude Code  │
-│          │ ◀ ▶ ⟳  http://localhost:5173/  [⌖][📱]│─────────────────────│
-│          │ ┌───────────────────────────────────┐ │ ┌─────────────────┐ │
-│          │ │  My App            Login  Signup  │ │ │⌖ button.cta     │ │
-│          │ │                    ┏━━━━━━━━━━━┓  │ │ │  Hero.tsx:42  ✕ │ │
-│          │ │  Welcome back      ┃Get started┃◀─┼─┼─│ 160×44 · 📷     │ │
-│          │ │                    ┗━━━━━━━━━━━┛  │ │ └─────────────────┘ │
-│          │ │    ┌ button.cta  160×44 ────────┐ │ │ why is this not     │
-│          │ │    │ Ask about this element…   ⏎│ │ │ vertically centered │
-│          │ │    └────────────────────────────┘ │ │ with the heading?   │
-│          │ └───────────────────────────────────┘ │                     │
-│          │ CONSOLE  ⚠ 1  ✖ 2                     │                     │
-└──────────┴───────────────────────────────────────┴─────────────────────┘
-```
-
 Coding agents are great at code and blind to the UI. Lookingglass gives them eyes.
 
 Run your dev server, open it in the built-in browser, click the button that looks wrong and ask. The agent gets the element's HTML, styles, a screenshot and the **source file that rendered it**. It edits the code, HMR reloads, it takes its own screenshot to check, and you review the result hunk by hunk.
