@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSkill, skills, thermoNuclearCodeQualityReview } from './index'
+import { fixCiSkill, parseSkill, skills, thermoNuclearCodeQualityReview } from './index'
 
 describe('skills', () => {
   it('parses frontmatter from a skill', () => {
@@ -17,5 +17,10 @@ describe('skills', () => {
   it('bundles the thermo-nuclear review', () => {
     expect(skills['thermo-nuclear-code-quality-review']).toBe(thermoNuclearCodeQualityReview)
     expect(thermoNuclearCodeQualityReview.body.startsWith('# Thermo-Nuclear Code Quality Review')).toBe(true)
+  })
+
+  it('bundles the fix-ci skill', () => {
+    expect(skills['fix-ci']).toBe(fixCiSkill)
+    expect(fixCiSkill.body.startsWith('# Fix CI')).toBe(true)
   })
 })

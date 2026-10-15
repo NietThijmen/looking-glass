@@ -20,7 +20,7 @@ interface ListedFile {
   deletions: number
 }
 
-type PullFields = Omit<PullRequestSummary, 'fromFork'>
+type PullFields = Omit<PullRequestSummary, 'fromFork' | 'ciFailing'>
 
 interface Pull {
   fields: PullFields
@@ -38,7 +38,15 @@ export const GithubForge: Forge = {
   async list(query) {
     try {
       const open = await getPages(query, `${repoUrl(query)}/pulls?state=open&sort=created&direction=desc`)
-      return { ok: true, pullRequests: open.flatMap((item) => summarize(item) ?? []) }
+      const pulls = open.flatMap((item) => parsePull(item) ?? [])
+      const pullRequests = await Promise.all(
+        pulls.map(async (pull) => ({
+          ...pull.fields,
+          fromFork: pull.fromFork,
+          ciFailing: (await loadChecks(query, pull.headSha)).some(isFailing),
+        })),
+      )
+      return { ok: true, pullRequests }
     } catch (error) {
       return { ok: false, error: errorText(error) }
     }
@@ -167,30 +175,23 @@ async function loadPullRequest(query: PullRequestQuery): Promise<PullRequestDeta
   if (!pull) return null
   const { number } = pull.fields
 
-  const [files, diff, runs, statuses, comments, reviews] = await Promise.all([
+  const [files, diff, checks, comments, reviews] = await Promise.all([
     getPages(query, `${repo}/pulls/${number}/files`).catch(() => []),
     request(query, 'GET', `${repo}/pulls/${number}`, { accept: 'application/vnd.github.v3.diff' })
       .then((response) => response.text())
       .catch(() => ''),
-    getPages(query, `${repo}/commits/${pull.headSha}/check-runs`, (json) => asRecord(json).check_runs).catch(
-      () => [],
-    ),
-    getJson(query, `${repo}/commits/${pull.headSha}/status`).catch(() => null),
+    loadChecks(query, pull.headSha),
     getPages(query, `${repo}/issues/${number}/comments`).catch(() => []),
     getPages(query, `${repo}/pulls/${number}/reviews`).catch(() => []),
   ])
   const patches = diff ? splitDiff(diff) : new Map<string, SplitPatch>()
-  const contexts = asRecord(statuses).statuses
 
   return {
     forgeId: GITHUB_ID,
     ...pull.fields,
     body: pull.body,
     files: buildFiles(asFiles(files), patches),
-    checks: [
-      ...runs.flatMap((run) => runCheck(run) ?? []),
-      ...(Array.isArray(contexts) ? contexts.map(statusCheck) : []),
-    ],
+    checks,
     comments: mergeComments([
       ...comments.map(issueComment),
       ...reviews.flatMap((review) => reviewComment(review) ?? []),
@@ -198,9 +199,22 @@ async function loadPullRequest(query: PullRequestQuery): Promise<PullRequestDeta
   }
 }
 
-function summarize(value: unknown): PullRequestSummary | null {
-  const pull = parsePull(value)
-  return pull && { ...pull.fields, fromFork: pull.fromFork }
+/** Check runs and commit statuses for a commit. A failed request counts as no checks. */
+async function loadChecks(query: PullRequestQuery, sha: string): Promise<PullRequestCheck[]> {
+  const commit = `${repoUrl(query)}/commits/${sha}`
+  const [runs, statuses] = await Promise.all([
+    getPages(query, `${commit}/check-runs`, (json) => asRecord(json).check_runs).catch(() => []),
+    getJson(query, `${commit}/status`).catch(() => null),
+  ])
+  const contexts = asRecord(statuses).statuses
+  return [
+    ...runs.flatMap((run) => runCheck(run) ?? []),
+    ...(Array.isArray(contexts) ? contexts.map(statusCheck) : []),
+  ]
+}
+
+function isFailing(check: PullRequestCheck): boolean {
+  return check.conclusion === 'failure' || check.conclusion === 'timed_out'
 }
 
 function parsePull(value: unknown): Pull | null {

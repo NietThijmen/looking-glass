@@ -1,3 +1,4 @@
+import fixCi from './fix-ci/SKILL.md?raw'
 import thermoNuclear from './thermo-nuclear-code-quality-review/SKILL.md?raw'
 
 export interface Skill {
@@ -23,8 +24,10 @@ export function parseSkill(source: string): Skill {
 }
 
 export const thermoNuclearCodeQualityReview = parseSkill(thermoNuclear)
+export const fixCiSkill = parseSkill(fixCi)
 
 /** Every bundled skill, by name. */
 export const skills: Readonly<Record<string, Skill>> = {
   [thermoNuclearCodeQualityReview.name]: thermoNuclearCodeQualityReview,
+  [fixCiSkill.name]: fixCiSkill,
 }

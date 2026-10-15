@@ -224,6 +224,22 @@ describe('GithubForge.list', () => {
     ])
   })
 
+  it('flags pull requests whose head commit has a failing check', async () => {
+    const other = { ...PULL, number: 14, head: { ref: 'y', sha: 'def456' } }
+    const run = (conclusion: string) => () =>
+      json({ check_runs: [{ name: 'test', status: 'completed', conclusion }] })
+    const { fetch } = scripted({
+      '/pulls?state=open': () => json([PULL, other]),
+      '/commits/abc123/check-runs': run('failure'),
+      '/commits/def456/check-runs': run('success'),
+    })
+    const result = await GithubForge.list({ ...base, fetch })
+    expect(result.ok && result.pullRequests.map((pr) => [pr.number, pr.ciFailing])).toEqual([
+      [12, true],
+      [14, false],
+    ])
+  })
+
   it('reports why listing failed', async () => {
     expect(await GithubForge.list({ ...base, token: null, fetch: scripted({}).fetch })).toMatchObject({
       ok: false,

@@ -59,6 +59,8 @@ export interface PullRequestSummary {
   url: string
   /** The head branch lives in another repository, so it is not on the remote as `head`. */
   fromFork: boolean
+  /** At least one check on the head commit failed. */
+  ciFailing: boolean
 }
 
 /** Open pull requests, or why they could not be listed. */

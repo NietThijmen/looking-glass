@@ -5,9 +5,20 @@ import {
   type PullRequestSummary,
 } from '@lookingglass/shared/forge'
 import { useWorkspace } from '../store/workspace'
-import { checkoutPullRequest, reviewPullRequest } from './pullRequestReview'
+import {
+  checkoutPullRequest,
+  fixPullRequestCi,
+  reviewPullRequest,
+  viewPullRequest,
+} from './pullRequestReview'
 
-type Busy = { number: number; action: 'checkout' | 'review' }
+const actions = {
+  checkout: checkoutPullRequest,
+  review: reviewPullRequest,
+  fixCi: fixPullRequestCi,
+}
+
+type Busy = { number: number; action: 'checkout' | 'review' | 'fixCi' }
 
 function PullRequestRow({
   pr,
@@ -16,6 +27,7 @@ function PullRequestRow({
   disabled,
   onCheckout,
   onReview,
+  onFixCi,
 }: {
   pr: PullRequestSummary
   current: boolean
@@ -23,6 +35,7 @@ function PullRequestRow({
   disabled: boolean
   onCheckout(): void
   onReview(): void
+  onFixCi(): void
 }) {
   return (
     <div data-testid="pull-request-row" data-number={pr.number} className="border-b border-border px-3 py-2">
@@ -59,6 +72,17 @@ function PullRequestRow({
         >
           {busy === 'review' ? 'Starting…' : 'Review'}
         </button>
+        {pr.ciFailing && (
+          <button
+            type="button"
+            data-testid="pull-request-fix-ci"
+            disabled={disabled}
+            onClick={onFixCi}
+            className="rounded border border-red-400 px-2 py-0.5 text-[11px] text-red-400 hover:bg-red-400/10 disabled:opacity-50"
+          >
+            {busy === 'fixCi' ? 'Starting…' : 'Fix CI'}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -98,7 +122,7 @@ export function PullRequestsPanel() {
   const run = async (pr: PullRequestSummary, action: Busy['action']): Promise<void> => {
     setBusy({ number: pr.number, action })
     setError(null)
-    const failure = await (action === 'review' ? reviewPullRequest(pr) : checkoutPullRequest(pr))
+    const failure = await actions[action](pr)
     if (failure) setError(failure)
     setBusy(null)
   }
@@ -144,6 +168,7 @@ export function PullRequestsPanel() {
               disabled={busy !== null}
               onCheckout={() => void run(pr, 'checkout')}
               onReview={() => void run(pr, 'review')}
+              onFixCi={() => void run(pr, 'fixCi')}
             />
           ))
         )}

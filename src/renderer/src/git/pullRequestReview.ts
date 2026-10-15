@@ -1,5 +1,6 @@
 import { pullRequestBranch, type PullRequestSummary } from '@lookingglass/shared/forge'
-import { thermoNuclearCodeQualityReview } from '@lookingglass/skills'
+import { fixCiSkill, thermoNuclearCodeQualityReview } from '@lookingglass/skills'
+import type { Skill } from '@lookingglass/skills'
 import { useAgents, type Attachment } from '../store/agents'
 import { useWorkspace } from '../store/workspace'
 
@@ -12,23 +13,40 @@ export async function checkoutPullRequest(pr: Checkout): Promise<string | null> 
   return result.ok ? null : (result.error ?? 'Checkout failed')
 }
 
-const skillAttachment: Attachment = {
-  label: `Skill: ${thermoNuclearCodeQualityReview.name}`,
-  blocks: [{ type: 'text', text: thermoNuclearCodeQualityReview.body }],
+function skillAttachment(skill: Skill): Attachment {
+  return { label: `Skill: ${skill.name}`, blocks: [{ type: 'text', text: skill.body }] }
 }
 
-/** Check the pull request out, then start a chat tab that reviews it with the code-quality skill. */
-export async function reviewPullRequest(pr: PullRequestSummary): Promise<string | null> {
+/** Check the pull request out, then start a chat tab with `prompt` and the skill attached. */
+async function startPullRequestChat(
+  pr: PullRequestSummary,
+  title: string,
+  skill: Skill,
+  prompt: string,
+): Promise<string | null> {
   const error = await checkoutPullRequest(pr)
   if (error) return error
-  const key = await useAgents.getState().newChat(undefined, { title: `Review #${pr.number}` })
-  await useAgents
-    .getState()
-    .send(
-      key,
-      `Review pull request #${pr.number} "${pr.title}" (${pr.head} into ${pr.base}) with the attached skill. ` +
-        `Its branch is checked out. Review the changes with \`git diff origin/${pr.base}...HEAD\`.`,
-      [skillAttachment],
-    )
+  const key = await useAgents.getState().newChat(undefined, { title })
+  await useAgents.getState().send(key, prompt, [skillAttachment(skill)])
   return null
+}
+
+export function reviewPullRequest(pr: PullRequestSummary): Promise<string | null> {
+  return startPullRequestChat(
+    pr,
+    `Review #${pr.number}`,
+    thermoNuclearCodeQualityReview,
+    `Review pull request #${pr.number} "${pr.title}" (${pr.head} into ${pr.base}) with the attached skill. ` +
+      `Its branch is checked out. Review the changes with \`git diff origin/${pr.base}...HEAD\`.`,
+  )
+}
+
+export function fixPullRequestCi(pr: PullRequestSummary): Promise<string | null> {
+  return startPullRequestChat(
+    pr,
+    `Fix CI #${pr.number}`,
+    fixCiSkill,
+    `CI is failing on pull request #${pr.number} "${pr.title}" (${pr.head} into ${pr.base}). ` +
+      `Its branch is checked out. Fix it with the attached skill.`,
+  )
 }
