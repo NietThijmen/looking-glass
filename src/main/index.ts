@@ -13,6 +13,7 @@ import { applyHardening } from './security/hardening'
 import { registerAppScheme, serveRenderer } from './security/protocol'
 import { runSmokeTest } from './smoke'
 import { loadAppState } from './state/appState'
+import { loadRecentWorkspaces } from './state/recentWorkspaces'
 import { createMainWindow } from './window'
 
 app.setName('Lookingglass')
@@ -51,6 +52,7 @@ if (!isSmokeTest && !app.requestSingleInstanceLock()) {
     registerSettingsHandlers()
     await startAgentServices()
     await loadSettings()
+    await loadRecentWorkspaces()
     installMenu()
     startAutoUpdates()
 

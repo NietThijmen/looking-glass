@@ -4,6 +4,34 @@ import { COMMANDS, keyFor } from '@lookingglass/shared/settings'
 import { settings } from './state/settings'
 import { updateMenuItems } from './updater'
 import { send } from './ipc/typed'
+import { openWorkspace } from './ipc/workspace'
+import {
+  clearRecentWorkspaces,
+  onRecentWorkspacesChange,
+  recentWorkspaces,
+  removeRecentWorkspace,
+} from './state/recentWorkspaces'
+
+function openRecentMenu(): MenuItemConstructorOptions {
+  const roots = recentWorkspaces()
+  return {
+    label: 'Open Recent',
+    enabled: roots.length > 0,
+    submenu: [
+      ...roots.map((root): MenuItemConstructorOptions => ({
+        label: root,
+        click: () => {
+          openWorkspace(root).catch((error: unknown) => {
+            console.warn(`[workspace] could not open ${root}:`, error)
+            void removeRecentWorkspace(root)
+          })
+        },
+      })),
+      { type: 'separator' },
+      { label: 'Clear Recent', click: () => void clearRecentWorkspaces() },
+    ],
+  }
+}
 
 function command(label: string, accelerator: string, cmd: MenuCommand): MenuItemConstructorOptions {
   return {
@@ -22,6 +50,11 @@ function command(label: string, accelerator: string, cmd: MenuCommand): MenuItem
  * Cmd+W (close window) with "close tab".
  */
 export function installMenu(): void {
+  onRecentWorkspacesChange(buildMenu)
+  buildMenu()
+}
+
+function buildMenu(): void {
   const isMac = process.platform === 'darwin'
   const prefs = settings()
   const item = (cmd: MenuCommand): MenuItemConstructorOptions => {
@@ -52,6 +85,7 @@ export function installMenu(): void {
       label: 'File',
       submenu: [
         item('open-folder'),
+        openRecentMenu(),
         { type: 'separator' },
         item('save'),
         item('close-tab'),
