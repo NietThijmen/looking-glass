@@ -16,9 +16,10 @@ const actions = {
   checkout: checkoutPullRequest,
   review: reviewPullRequest,
   fixCi: fixPullRequestCi,
+  view: viewPullRequest,
 }
 
-type Busy = { number: number; action: 'checkout' | 'review' | 'fixCi' }
+type Busy = { number: number; action: 'checkout' | 'review' | 'fixCi' | 'view' }
 
 function PullRequestRow({
   pr,
@@ -28,6 +29,7 @@ function PullRequestRow({
   onCheckout,
   onReview,
   onFixCi,
+  onView,
 }: {
   pr: PullRequestSummary
   current: boolean
@@ -36,23 +38,32 @@ function PullRequestRow({
   onCheckout(): void
   onReview(): void
   onFixCi(): void
+  onView(): void
 }) {
   return (
     <div data-testid="pull-request-row" data-number={pr.number} className="border-b border-border px-3 py-2">
-      <div className="flex items-baseline gap-2">
-        <span className="shrink-0 text-[11px] text-muted">#{pr.number}</span>
-        <span className="min-w-0 truncate text-[13px] text-fg" title={pr.title}>
-          {pr.title}
-        </span>
-        {pr.isDraft && (
-          <span className="shrink-0 rounded-full border border-border px-1.5 text-[10px] text-muted">
-            Draft
+      <button
+        type="button"
+        data-testid="pull-request-open"
+        disabled={disabled}
+        onClick={onView}
+        className="block w-full text-left disabled:opacity-50"
+      >
+        <div className="flex items-baseline gap-2">
+          <span className="shrink-0 text-[11px] text-muted">#{pr.number}</span>
+          <span className="min-w-0 truncate text-[13px] text-fg" title={pr.title}>
+            {pr.title}
           </span>
-        )}
-      </div>
-      <div className="mt-0.5 truncate text-[11px] text-muted">
-        {pr.author} · {pr.head} into {pr.base}
-      </div>
+          {pr.isDraft && (
+            <span className="shrink-0 rounded-full border border-border px-1.5 text-[10px] text-muted">
+              Draft
+            </span>
+          )}
+        </div>
+        <div className="mt-0.5 truncate text-[11px] text-muted">
+          {pr.author} · {pr.head} into {pr.base}
+        </div>
+      </button>
       <div className="mt-1.5 flex gap-1.5">
         <button
           type="button"
@@ -169,6 +180,7 @@ export function PullRequestsPanel() {
               onCheckout={() => void run(pr, 'checkout')}
               onReview={() => void run(pr, 'review')}
               onFixCi={() => void run(pr, 'fixCi')}
+              onView={() => void run(pr, 'view')}
             />
           ))
         )}

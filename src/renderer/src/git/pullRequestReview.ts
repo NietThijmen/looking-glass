@@ -1,6 +1,7 @@
 import { pullRequestBranch, type PullRequestSummary } from '@lookingglass/shared/forge'
 import { fixCiSkill, thermoNuclearCodeQualityReview } from '@lookingglass/skills'
 import type { Skill } from '@lookingglass/skills'
+import { useEditor } from '../store/editor'
 import { useAgents, type Attachment } from '../store/agents'
 import { useWorkspace } from '../store/workspace'
 
@@ -11,6 +12,13 @@ export async function checkoutPullRequest(pr: Checkout): Promise<string | null> 
   if (useWorkspace.getState().git?.branch === pullRequestBranch(pr)) return null
   const result = await window.lookingglass.git.checkoutPullRequest(pr)
   return result.ok ? null : (result.error ?? 'Checkout failed')
+}
+
+/** Check the pull request out so the pull-request tab shows it, then open that tab. */
+export async function viewPullRequest(pr: Checkout): Promise<string | null> {
+  const error = await checkoutPullRequest(pr)
+  if (!error) useEditor.getState().openPullRequest()
+  return error
 }
 
 function skillAttachment(skill: Skill): Attachment {
