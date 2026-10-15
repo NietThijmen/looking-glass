@@ -4,13 +4,15 @@ import type {
   PullRequestDetail,
 } from '@lookingglass/shared/forge'
 import type { ParsedRemote } from './remote'
-import type { CommandRun } from './run'
 
 export interface PullRequestQuery {
   cwd: string
   remote: ParsedRemote
   branch: string
-  run: CommandRun
+  /** GitHub API token, or null when none was found. */
+  token: string | null
+  /** HTTP client. Tests pass a fake; the app passes the global `fetch`. */
+  fetch: typeof fetch
 }
 
 /**

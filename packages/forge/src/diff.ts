@@ -8,7 +8,7 @@ export interface SplitPatch {
   patch: string
 }
 
-/** Split `gh pr diff` output into one patch per file. */
+/** Split a unified GitHub pull request diff into one patch per file. */
 export function splitDiff(diff: string): Map<string, SplitPatch> {
   const files = new Map<string, SplitPatch>()
   const starts = [...diff.matchAll(/^diff --git /gm)]

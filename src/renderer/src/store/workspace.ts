@@ -21,7 +21,7 @@ interface WorkspaceStore {
   git: GitStatus | null
   /** Git status by file path, plus a rolled-up marker for every ancestor dir. */
   gitByPath: Record<string, GitStatusEntry['status']>
-  /** Open pull request for the current branch. Null is "no PR", including a missing `gh` login. */
+  /** Open pull request for the current branch. Null is "no PR", including a missing GitHub token. */
   pullRequest: PullRequestDetail | null
   /** True while a branch change is resolving `git.pullRequest`. Typing does not wait on this. */
   pullRequestPending: boolean

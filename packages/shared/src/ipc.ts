@@ -375,7 +375,7 @@ export interface LookingglassApi {
     log(limit?: number): Promise<GitLogEntry[]>
     commit(message: string): Promise<GitCommitResult>
     push(): Promise<GitPushResult>
-    /** Open pull request for the current branch, or null. A missing `gh` login is null. */
+    /** Open pull request for the current branch, or null. A missing GitHub token is null. */
     pullRequest(): Promise<PullRequestDetail | null>
     pullRequestAction(number: number, action: PullRequestAction): Promise<PullRequestActionResult>
     onChanged(listener: Listener<'git:changed'>): Unsubscribe

@@ -3,7 +3,13 @@ import type { FsChange, WorkspaceInfo } from '@lookingglass/shared/ipc'
 import { isSmokeTest } from '../env'
 import { saveAppState } from '../state/appState'
 import { TerminalService } from '../terminal/TerminalService'
-import { forgeFor, parseRemote, runCommand, type Forge, type PullRequestQuery } from '@lookingglass/forge'
+import {
+  forgeFor,
+  parseRemote,
+  resolveGithubToken,
+  type Forge,
+  type PullRequestQuery,
+} from '@lookingglass/forge'
 import {
   GitService,
   listFiles,
@@ -112,7 +118,7 @@ export function registerWorkspaceHandlers(): void {
     if (result.ok) broadcast('git:changed', null)
     return result
   })
-  // Separate from status so chat typing never waits on `gh`.
+  // Separate from status so chat typing never waits on GitHub.
   handle('git:pullRequest', async () => {
     const target = await forgeTarget()
     return target ? target.forge.pullRequest(target.query) : null
@@ -139,5 +145,6 @@ async function forgeTarget(): Promise<{ forge: Forge; query: PullRequestQuery } 
   if (!remote) return null
   const forge = forgeFor(remote)
   if (!forge) return null
-  return { forge, query: { cwd: root, remote, branch: upstream.branch, run: runCommand } }
+  const token = await resolveGithubToken(root)
+  return { forge, query: { cwd: root, remote, branch: upstream.branch, token, fetch } }
 }

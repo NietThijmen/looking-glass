@@ -9,9 +9,9 @@ import { splitDiff, type SplitPatch } from './diff'
 import type { Forge, PullRequestQuery } from './types'
 
 const GITHUB_ID = 'github'
-
-const VIEW_FIELDS =
-  'number,title,body,url,author,baseRefName,headRefName,state,isDraft,files,statusCheckRollup,comments,reviews'
+const API = 'https://api.github.com'
+const PER_PAGE = 100
+const MAX_PAGES = 10
 
 interface ListedFile {
   path: string
@@ -19,7 +19,20 @@ interface ListedFile {
   deletions: number
 }
 
-/** GitHub.com only. A missing `gh`, a missing login, or no open pull request is null. */
+interface Pull {
+  number: number
+  nodeId: string
+  title: unknown
+  body: unknown
+  url: unknown
+  author: unknown
+  base: unknown
+  head: unknown
+  headSha: string
+  isDraft: unknown
+}
+
+/** GitHub.com only. A missing token, a failed request, or no open pull request is null. */
 export const GithubForge: Forge = {
   id: GITHUB_ID,
   matches(remote) {
@@ -33,105 +46,190 @@ export const GithubForge: Forge = {
     }
   },
   async act(query, number, action) {
-    const repo = `${query.remote.owner}/${query.remote.repo}`
     try {
-      const result = await query.run('gh', [...actionArgs(number, action), '--repo', repo], query.cwd)
-      if (result.code === 0) return { ok: true }
-      return { ok: false, error: result.stderr.trim() || `gh exited with code ${result.code}` }
+      return await runAction(query, number, action)
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
   },
 }
 
-/** `gh pr` arguments for one action, minus `--repo`. Bodies go as arguments; there is no shell. */
-export function actionArgs(number: number, action: PullRequestAction): string[] {
-  const pr = String(number)
+class GithubError extends Error {}
+
+function repoPath(query: PullRequestQuery): string {
+  return `/repos/${encodeURIComponent(query.remote.owner)}/${encodeURIComponent(query.remote.repo)}`
+}
+
+async function request(
+  query: PullRequestQuery,
+  method: string,
+  path: string,
+  options: { body?: unknown; accept?: string } = {},
+): Promise<Response> {
+  if (!query.token) throw new GithubError('No GitHub token. Set GH_TOKEN or GITHUB_TOKEN.')
+  const response = await query.fetch(path.startsWith('http') ? path : `${API}${path}`, {
+    method,
+    headers: {
+      Accept: options.accept ?? 'application/vnd.github+json',
+      Authorization: `Bearer ${query.token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  })
+  if (!response.ok) throw new GithubError(await errorMessage(response))
+  return response
+}
+
+async function errorMessage(response: Response): Promise<string> {
+  const text = await response.text().catch(() => '')
+  try {
+    const message = (JSON.parse(text) as { message?: unknown }).message
+    if (typeof message === 'string' && message) return message
+  } catch {
+    // Not JSON; fall through to the status line.
+  }
+  return text.trim() || `GitHub returned ${response.status}`
+}
+
+async function getJson(query: PullRequestQuery, path: string): Promise<unknown> {
+  return (await request(query, 'GET', path)).json()
+}
+
+/** Every page of a list endpoint, capped so a huge pull request cannot loop forever. */
+async function getPages(query: PullRequestQuery, path: string, key?: string): Promise<unknown[]> {
+  const items: unknown[] = []
+  const joiner = path.includes('?') ? '&' : '?'
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const json = await getJson(query, `${path}${joiner}per_page=${PER_PAGE}&page=${page}`)
+    const list = key && json && typeof json === 'object' ? (json as Record<string, unknown>)[key] : json
+    if (!Array.isArray(list)) break
+    items.push(...list)
+    if (list.length < PER_PAGE) break
+  }
+  return items
+}
+
+async function runAction(
+  query: PullRequestQuery,
+  number: number,
+  action: PullRequestAction,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const repo = repoPath(query)
   switch (action.kind) {
     case 'editBody':
-      return ['pr', 'edit', pr, '--body', action.body]
+      await request(query, 'PATCH', `${repo}/pulls/${number}`, { body: { body: action.body } })
+      break
     case 'comment':
-      return ['pr', 'comment', pr, '--body', action.body]
+      await request(query, 'POST', `${repo}/issues/${number}/comments`, { body: { body: action.body } })
+      break
     case 'draft':
-      return ['pr', 'ready', pr, '--undo']
-    case 'ready':
-      return ['pr', 'ready', pr]
+    case 'ready': {
+      // The REST API cannot toggle draft state; only GraphQL can.
+      const pull = asRecord(await getJson(query, `${repo}/pulls/${number}`))
+      const nodeId = asString(pull.node_id)
+      if (!nodeId) throw new GithubError('GitHub did not return the pull request id.')
+      const mutation = action.kind === 'draft' ? 'convertPullRequestToDraft' : 'markPullRequestReadyForReview'
+      const response = await request(query, 'POST', `${API}/graphql`, {
+        body: {
+          query: `mutation($id: ID!) { ${mutation}(input: { pullRequestId: $id }) { clientMutationId } }`,
+          variables: { id: nodeId },
+        },
+      })
+      const errors = asRecord(await response.json()).errors
+      if (Array.isArray(errors) && errors.length > 0) {
+        throw new GithubError(asString(asRecord(errors[0]).message) || 'GitHub rejected the request.')
+      }
+      break
+    }
     case 'merge':
-      return ['pr', 'merge', pr, `--${action.method}`]
+      await request(query, 'PUT', `${repo}/pulls/${number}/merge`, { body: { merge_method: action.method } })
+      break
   }
+  return { ok: true }
 }
 
 async function loadPullRequest(query: PullRequestQuery): Promise<PullRequestDetail | null> {
-  const repo = `${query.remote.owner}/${query.remote.repo}`
-  const view = await query.run(
-    'gh',
-    ['pr', 'view', query.branch, '--repo', repo, '--json', VIEW_FIELDS],
-    query.cwd,
-  )
-  if (view.code !== 0) return null
+  const repo = repoPath(query)
+  const head = encodeURIComponent(`${query.remote.owner}:${query.branch}`)
+  const open = await getJson(query, `${repo}/pulls?state=open&head=${head}&per_page=1`)
+  const pull = Array.isArray(open) ? parsePull(open[0]) : null
+  if (!pull) return null
 
-  const json = parseView(view.stdout)
-  if (!json) return null
-
-  const diff = await query.run('gh', ['pr', 'diff', String(json.number), '--repo', repo], query.cwd)
-  const patches = diff.code === 0 ? splitDiff(diff.stdout) : new Map<string, SplitPatch>()
+  const [files, diff, runs, statuses, comments, reviews] = await Promise.all([
+    getPages(query, `${repo}/pulls/${pull.number}/files`).catch(() => []),
+    request(query, 'GET', `${repo}/pulls/${pull.number}`, { accept: 'application/vnd.github.v3.diff' })
+      .then((response) => response.text())
+      .catch(() => ''),
+    getPages(query, `${repo}/commits/${pull.headSha}/check-runs`, 'check_runs').catch(() => []),
+    getJson(query, `${repo}/commits/${pull.headSha}/status`).catch(() => null),
+    getPages(query, `${repo}/issues/${pull.number}/comments`).catch(() => []),
+    getPages(query, `${repo}/pulls/${pull.number}/reviews`).catch(() => []),
+  ])
+  const patches = diff ? splitDiff(diff) : new Map<string, SplitPatch>()
+  const contexts = asRecord(statuses).statuses
 
   return {
     forgeId: GITHUB_ID,
-    number: json.number,
-    title: asString(json.title),
-    body: asString(json.body),
-    url: asString(json.url),
-    author: authorLogin(json.author),
-    base: asString(json.baseRefName),
-    head: asString(json.headRefName),
-    isDraft: json.isDraft === true,
-    files: buildFiles(asFiles(json.files), patches),
-    checks: asChecks(json.statusCheckRollup),
-    comments: asComments(json.comments, json.reviews),
+    number: pull.number,
+    title: asString(pull.title),
+    body: asString(pull.body),
+    url: asString(pull.url),
+    author: authorLogin(pull.author),
+    base: asString(pull.base),
+    head: asString(pull.head),
+    isDraft: pull.isDraft === true,
+    files: buildFiles(asFiles(files), patches),
+    checks: [
+      ...asChecks(runs.map(runCheck)),
+      ...asChecks(Array.isArray(contexts) ? contexts.map(statusCheck) : []),
+    ],
+    comments: asComments(
+      comments.map((item) => {
+        const raw = asRecord(item)
+        return { author: raw.user, body: raw.body, createdAt: raw.created_at }
+      }),
+      reviews.map((item) => {
+        const raw = asRecord(item)
+        return { author: raw.user, body: raw.body, state: raw.state, submittedAt: raw.submitted_at }
+      }),
+    ),
   }
 }
 
-interface GhView {
-  number: number
-  title: unknown
-  body: unknown
-  url: unknown
-  author: unknown
-  baseRefName: unknown
-  headRefName: unknown
-  isDraft: unknown
-  files: unknown
-  statusCheckRollup: unknown
-  comments: unknown
-  reviews: unknown
-}
-
-function parseView(stdout: string): GhView | null {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(stdout)
-  } catch {
-    return null
-  }
-  if (!parsed || typeof parsed !== 'object') return null
-  const json = parsed as Record<string, unknown>
-  if (typeof json.number !== 'number') return null
-  if (typeof json.state !== 'string' || json.state.toUpperCase() !== 'OPEN') return null
+function parsePull(value: unknown): Pull | null {
+  const raw = asRecord(value)
+  if (typeof raw.number !== 'number') return null
+  if (asString(raw.state).toLowerCase() !== 'open') return null
+  const head = asRecord(raw.head)
   return {
-    number: json.number,
-    title: json.title,
-    body: json.body,
-    url: json.url,
-    author: json.author,
-    baseRefName: json.baseRefName,
-    headRefName: json.headRefName,
-    isDraft: json.isDraft,
-    files: json.files,
-    statusCheckRollup: json.statusCheckRollup,
-    comments: json.comments,
-    reviews: json.reviews,
+    number: raw.number,
+    nodeId: asString(raw.node_id),
+    title: raw.title,
+    body: raw.body,
+    url: raw.html_url,
+    author: raw.user,
+    base: asRecord(raw.base).ref,
+    head: head.ref,
+    headSha: asString(head.sha),
+    isDraft: raw.draft,
   }
+}
+
+/** REST check run, reshaped to what `asCheck` reads. */
+function runCheck(item: unknown): unknown {
+  const raw = asRecord(item)
+  return { name: raw.name, status: raw.status, conclusion: raw.conclusion, detailsUrl: raw.html_url }
+}
+
+/** REST commit status, reshaped to what `asCheck` reads. */
+function statusCheck(item: unknown): unknown {
+  const raw = asRecord(item)
+  return { __typename: 'StatusContext', context: raw.context, state: raw.state, targetUrl: raw.target_url }
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
 }
 
 function buildFiles(listed: ListedFile[], patches: Map<string, SplitPatch>): PullRequestFile[] {
@@ -166,10 +264,10 @@ function asFiles(value: unknown): ListedFile[] {
   const files: ListedFile[] = []
   for (const item of value) {
     if (!item || typeof item !== 'object') continue
-    const file = item as { path?: unknown; additions?: unknown; deletions?: unknown }
-    if (typeof file.path !== 'string') continue
+    const file = item as { filename?: unknown; additions?: unknown; deletions?: unknown }
+    if (typeof file.filename !== 'string') continue
     files.push({
-      path: file.path,
+      path: file.filename,
       additions: typeof file.additions === 'number' ? file.additions : 0,
       deletions: typeof file.deletions === 'number' ? file.deletions : 0,
     })
