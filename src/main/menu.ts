@@ -70,6 +70,7 @@ export function installMenu(): void {
         item('show-search'),
         item('show-git'),
         item('show-commits'),
+        item('show-pull-requests'),
         item('show-agents'),
         item('toggle-sidebar'),
         item('toggle-terminal'),

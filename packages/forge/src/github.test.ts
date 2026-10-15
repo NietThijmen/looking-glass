@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { actionArgs, GithubForge } from './github'
-import type { CommandRun } from './run'
+import { GithubForge } from './github'
 import type { PullRequestQuery } from './types'
 
 const DIFF = `diff --git a/src/button.tsx b/src/button.tsx
@@ -14,64 +13,79 @@ index 111..222 100644
 +extra
 `
 
-const OPEN = {
+const PULL = {
   number: 12,
+  node_id: 'PR_node',
   title: 'Update the button',
   body: 'Ship the button.',
-  url: 'https://github.com/acme/app/pull/12',
-  author: { login: 'ada' },
-  baseRefName: 'main',
-  headRefName: 'button',
-  state: 'OPEN',
-  isDraft: true,
-  files: [{ path: 'src/button.tsx', additions: 2, deletions: 1 }],
-  statusCheckRollup: [
-    {
-      __typename: 'CheckRun',
-      name: 'build',
-      status: 'COMPLETED',
-      conclusion: 'FAILURE',
-      detailsUrl: 'https://github.com/acme/app/actions/runs/1',
-    },
-  ],
-  comments: [{ author: { login: 'bob' }, body: 'Looks close.', createdAt: '2026-01-02T00:00:00Z' }],
-  reviews: [
-    { author: { login: 'cy' }, body: '', state: 'APPROVED', submittedAt: '2026-01-03T00:00:00Z' },
-    { author: { login: 'cy' }, body: '', state: 'COMMENTED', submittedAt: '2026-01-01T00:00:00Z' },
-    {
-      author: { login: 'dee' },
-      body: 'Rename it.',
-      state: 'CHANGES_REQUESTED',
-      submittedAt: '2026-01-01T00:00:00Z',
-    },
-  ],
+  html_url: 'https://github.com/acme/app/pull/12',
+  user: { login: 'ada' },
+  base: { ref: 'main' },
+  head: { ref: 'button', sha: 'abc123' },
+  state: 'open',
+  draft: true,
 }
 
-const base: Omit<PullRequestQuery, 'run'> = {
+const base: Omit<PullRequestQuery, 'fetch'> = {
   cwd: '/work',
   remote: { host: 'github.com', owner: 'acme', repo: 'app' },
   branch: 'button',
+  token: 'tok',
 }
 
-function scripted(
-  view: { code?: number; body?: unknown },
-  diff = DIFF,
-): {
-  run: CommandRun
-  calls: string[][]
-} {
-  const calls: string[][] = []
-  const run: CommandRun = async (command, args) => {
-    calls.push([command, ...args])
-    if (args[1] === 'view') {
-      if (view.code) return { code: view.code, stdout: '', stderr: 'no pr' }
-      return { code: 0, stdout: JSON.stringify(view.body), stderr: '' }
-    }
-    if (args[1] === 'diff') return { code: 0, stdout: diff, stderr: '' }
-    return { code: 1, stdout: '', stderr: '' }
-  }
-  return { run, calls }
+type Call = { url: string; method: string; body: unknown; accept: string }
+
+function json(value: unknown, status = 200): Response {
+  return new Response(JSON.stringify(value), { status })
 }
+
+/** A fetch that answers from `routes` (matched by URL suffix, first hit wins) and records calls. */
+function scripted(routes: Record<string, () => Response>): { fetch: typeof fetch; calls: Call[] } {
+  const calls: Call[] = []
+  const fake = (async (input: string, init?: RequestInit) => {
+    const headers = (init?.headers ?? {}) as Record<string, string>
+    calls.push({
+      url: input,
+      method: init?.method ?? 'GET',
+      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      accept: headers.Accept ?? '',
+    })
+    const key = Object.keys(routes).find((route) => input.includes(route))
+    return key ? routes[key]!() : json({ message: 'not found' }, 404)
+  }) as unknown as typeof fetch
+  return { fetch: fake, calls }
+}
+
+const openRoutes = (pull: unknown = PULL): Record<string, () => Response> => ({
+  '/pulls?state=open': () => json([pull]),
+  '/pulls/12/files': () => json([{ filename: 'src/button.tsx', additions: 2, deletions: 1 }]),
+  '/pulls/12/reviews': () =>
+    json([
+      { user: { login: 'cy' }, body: '', state: 'APPROVED', submitted_at: '2026-01-03T00:00:00Z' },
+      { user: { login: 'cy' }, body: '', state: 'COMMENTED', submitted_at: '2026-01-01T00:00:00Z' },
+      {
+        user: { login: 'dee' },
+        body: 'Rename it.',
+        state: 'CHANGES_REQUESTED',
+        submitted_at: '2026-01-01T00:00:00Z',
+      },
+    ]),
+  '/pulls/12': () => new Response(DIFF),
+  '/check-runs': () =>
+    json({
+      check_runs: [
+        {
+          name: 'build',
+          status: 'completed',
+          conclusion: 'failure',
+          html_url: 'https://github.com/acme/app/actions/runs/1',
+        },
+      ],
+    }),
+  '/status': () => json({ statuses: [] }),
+  '/issues/12/comments': () =>
+    json([{ user: { login: 'bob' }, body: 'Looks close.', created_at: '2026-01-02T00:00:00Z' }]),
+})
 
 describe('GithubForge', () => {
   it('matches github.com only', () => {
@@ -81,19 +95,15 @@ describe('GithubForge', () => {
   })
 
   it('maps an open pull request, including one file patch and one failed check', async () => {
-    const { run, calls } = scripted({ body: OPEN })
-    const detail = await GithubForge.pullRequest({ ...base, run })
-    expect(calls[0]).toEqual([
-      'gh',
-      'pr',
-      'view',
-      'button',
-      '--repo',
-      'acme/app',
-      '--json',
-      'number,title,body,url,author,baseRefName,headRefName,state,isDraft,files,statusCheckRollup,comments,reviews',
-    ])
-    expect(calls[1]).toEqual(['gh', 'pr', 'diff', '12', '--repo', 'acme/app'])
+    const { fetch, calls } = scripted(openRoutes())
+    const detail = await GithubForge.pullRequest({ ...base, fetch })
+    expect(calls[0]).toMatchObject({
+      url: 'https://api.github.com/repos/acme/app/pulls?state=open&head=acme%3Abutton&per_page=1',
+      method: 'GET',
+    })
+    expect(calls.find((call) => call.accept === 'application/vnd.github.v3.diff')?.url).toBe(
+      'https://api.github.com/repos/acme/app/pulls/12',
+    )
     expect(detail).toEqual({
       forgeId: 'github',
       number: 12,
@@ -104,15 +114,7 @@ describe('GithubForge', () => {
       base: 'main',
       head: 'button',
       isDraft: true,
-      files: [
-        {
-          path: 'src/button.tsx',
-          status: 'modified',
-          additions: 2,
-          deletions: 1,
-          patch: DIFF,
-        },
-      ],
+      files: [{ path: 'src/button.tsx', status: 'modified', additions: 2, deletions: 1, patch: DIFF }],
       checks: [
         {
           name: 'build',
@@ -129,46 +131,119 @@ describe('GithubForge', () => {
     })
   })
 
-  it('builds gh arguments for each action', () => {
-    expect(actionArgs(12, { kind: 'editBody', body: 'New body' })).toEqual([
-      'pr',
-      'edit',
-      '12',
-      '--body',
-      'New body',
-    ])
-    expect(actionArgs(12, { kind: 'comment', body: 'Hi' })).toEqual(['pr', 'comment', '12', '--body', 'Hi'])
-    expect(actionArgs(12, { kind: 'draft' })).toEqual(['pr', 'ready', '12', '--undo'])
-    expect(actionArgs(12, { kind: 'ready' })).toEqual(['pr', 'ready', '12'])
-    expect(actionArgs(12, { kind: 'merge', method: 'squash' })).toEqual(['pr', 'merge', '12', '--squash'])
+  it('sends the token as a bearer header', async () => {
+    let auth = ''
+    const fetch = (async (_url: string, init?: RequestInit) => {
+      auth = (init?.headers as Record<string, string>).Authorization ?? ''
+      return json([])
+    }) as unknown as typeof globalThis.fetch
+    await GithubForge.pullRequest({ ...base, fetch })
+    expect(auth).toBe('Bearer tok')
   })
 
-  it('reports a failed action with gh stderr', async () => {
-    const calls: string[][] = []
-    const run: CommandRun = async (command, args) => {
-      calls.push([command, ...args])
-      return { code: 1, stdout: '', stderr: 'not mergeable\n' }
-    }
-    expect(await GithubForge.act({ ...base, run }, 12, { kind: 'ready' })).toEqual({
+  it('sends each action to its endpoint', async () => {
+    const { fetch, calls } = scripted({
+      '/pulls/12/merge': () => json({ merged: true }),
+      '/issues/12/comments': () => json({}, 201),
+      '/pulls/12': () => json(PULL),
+      '/graphql': () => json({ data: {} }),
+    })
+    const query = { ...base, fetch }
+    expect(await GithubForge.act(query, 12, { kind: 'editBody', body: 'New body' })).toEqual({ ok: true })
+    expect(await GithubForge.act(query, 12, { kind: 'comment', body: 'Hi' })).toEqual({ ok: true })
+    expect(await GithubForge.act(query, 12, { kind: 'merge', method: 'squash' })).toEqual({ ok: true })
+    expect(await GithubForge.act(query, 12, { kind: 'ready' })).toEqual({ ok: true })
+    expect(await GithubForge.act(query, 12, { kind: 'draft' })).toEqual({ ok: true })
+    const summary = calls.map((call) => `${call.method} ${call.url.replace('https://api.github.com', '')}`)
+    expect(summary).toEqual([
+      'PATCH /repos/acme/app/pulls/12',
+      'POST /repos/acme/app/issues/12/comments',
+      'PUT /repos/acme/app/pulls/12/merge',
+      'GET /repos/acme/app/pulls/12',
+      'POST /graphql',
+      'GET /repos/acme/app/pulls/12',
+      'POST /graphql',
+    ])
+    expect(calls[0]!.body).toEqual({ body: 'New body' })
+    expect(calls[2]!.body).toEqual({ merge_method: 'squash' })
+    expect(JSON.stringify(calls[4]!.body)).toContain('markPullRequestReadyForReview')
+    expect(JSON.stringify(calls[6]!.body)).toContain('convertPullRequestToDraft')
+  })
+
+  it('reports a failed action with the GitHub message', async () => {
+    const { fetch } = scripted({ '/pulls/12/merge': () => json({ message: 'not mergeable' }, 405) })
+    expect(await GithubForge.act({ ...base, fetch }, 12, { kind: 'merge', method: 'merge' })).toEqual({
       ok: false,
       error: 'not mergeable',
     })
-    expect(calls[0]).toEqual(['gh', 'pr', 'ready', '12', '--repo', 'acme/app'])
+  })
+
+  it('reports a missing token on an action', async () => {
+    const { fetch } = scripted({})
+    const result = await GithubForge.act({ ...base, token: null, fetch }, 12, { kind: 'ready' })
+    expect(result.ok).toBe(false)
   })
 
   it('returns null for a closed pull request', async () => {
-    const { run, calls } = scripted({ body: { ...OPEN, state: 'CLOSED' } })
-    expect(await GithubForge.pullRequest({ ...base, run })).toBeNull()
-    expect(calls).toHaveLength(1)
+    const { fetch } = scripted(openRoutes({ ...PULL, state: 'closed' }))
+    expect(await GithubForge.pullRequest({ ...base, fetch })).toBeNull()
   })
 
-  it('returns null when gh exits non-zero', async () => {
-    const { run } = scripted({ code: 1 })
-    expect(await GithubForge.pullRequest({ ...base, run })).toBeNull()
+  it('returns null when no pull request matches the branch', async () => {
+    const { fetch } = scripted({ '/pulls?state=open': () => json([]) })
+    expect(await GithubForge.pullRequest({ ...base, fetch })).toBeNull()
   })
 
-  it('returns null when the command runner throws', async () => {
-    const run: CommandRun = () => Promise.reject(new Error('gh missing'))
-    expect(await GithubForge.pullRequest({ ...base, run })).toBeNull()
+  it('returns null without a token', async () => {
+    const { fetch, calls } = scripted(openRoutes())
+    expect(await GithubForge.pullRequest({ ...base, token: null, fetch })).toBeNull()
+    expect(calls).toHaveLength(0)
+  })
+
+  it('returns null when the request fails or throws', async () => {
+    const failing = scripted({ '/pulls?state=open': () => json({ message: 'Bad credentials' }, 401) })
+    expect(await GithubForge.pullRequest({ ...base, fetch: failing.fetch })).toBeNull()
+    const throwing = (() => Promise.reject(new Error('offline'))) as unknown as typeof fetch
+    expect(await GithubForge.pullRequest({ ...base, fetch: throwing })).toBeNull()
+  })
+})
+
+describe('GithubForge.list', () => {
+  it('lists open pull requests and flags forks', async () => {
+    const fork = { ...PULL, number: 13, head: { ref: 'x', sha: 's', repo: { full_name: 'zed/app' } } }
+    const same = {
+      ...PULL,
+      head: { ...PULL.head, repo: { full_name: 'acme/app' } },
+      base: { ref: 'main', repo: { full_name: 'acme/app' } },
+    }
+    const { fetch } = scripted({ '/pulls?state=open': () => json([same, { ...fork, base: same.base }]) })
+    const result = await GithubForge.list({ ...base, fetch })
+    expect(result.ok && result.pullRequests.map((pr) => [pr.number, pr.fromFork])).toEqual([
+      [12, false],
+      [13, true],
+    ])
+  })
+
+  it('flags pull requests whose head commit has a failing check', async () => {
+    const other = { ...PULL, number: 14, head: { ref: 'y', sha: 'def456' } }
+    const run = (conclusion: string) => () =>
+      json({ check_runs: [{ name: 'test', status: 'completed', conclusion }] })
+    const { fetch } = scripted({
+      '/pulls?state=open': () => json([PULL, other]),
+      '/commits/abc123/check-runs': run('failure'),
+      '/commits/def456/check-runs': run('success'),
+    })
+    const result = await GithubForge.list({ ...base, fetch })
+    expect(result.ok && result.pullRequests.map((pr) => [pr.number, pr.ciFailing])).toEqual([
+      [12, true],
+      [14, false],
+    ])
+  })
+
+  it('reports why listing failed', async () => {
+    expect(await GithubForge.list({ ...base, token: null, fetch: scripted({}).fetch })).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('token'),
+    })
   })
 })

@@ -64,6 +64,7 @@
     "@lookingglass/acp": "workspace:*",
     "@lookingglass/forge": "workspace:*",
     "@lookingglass/review": "workspace:*",
+    "@lookingglass/skills": "workspace:*",
     "@lookingglass/shared": "workspace:*",
     "@lookingglass/workspace": "workspace:*",
     "@agentclientprotocol/claude-agent-acp": "0.89.1",

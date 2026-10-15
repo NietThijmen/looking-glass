@@ -48,6 +48,30 @@ export interface PullRequestDetail {
   comments: PullRequestComment[]
 }
 
+/** One row of the pull-request list. */
+export interface PullRequestSummary {
+  number: number
+  title: string
+  author: string
+  base: string
+  head: string
+  isDraft: boolean
+  url: string
+  /** The head branch lives in another repository, so it is not on the remote as `head`. */
+  fromFork: boolean
+  /** At least one check on the head commit failed. */
+  ciFailing: boolean
+}
+
+/** Open pull requests, or why they could not be listed. */
+export type PullRequestListResult =
+  { ok: true; pullRequests: PullRequestSummary[] } | { ok: false; error: string }
+
+/** The local branch checking out a pull request leaves you on. */
+export function pullRequestBranch(pr: Pick<PullRequestSummary, 'number' | 'head' | 'fromFork'>): string {
+  return pr.fromFork ? `pr-${pr.number}` : pr.head
+}
+
 export type PullRequestMergeMethod = 'merge' | 'squash' | 'rebase'
 
 /** A change the pull-request tab asks the forge to make. */

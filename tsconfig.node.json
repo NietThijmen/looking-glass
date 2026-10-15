@@ -17,6 +17,7 @@
     { "path": "./packages/review" },
     { "path": "./packages/review/tsconfig.hunks.json" },
     { "path": "./packages/acp" },
-    { "path": "./packages/forge" }
+    { "path": "./packages/forge" },
+    { "path": "./packages/skills" }
   ]
 }

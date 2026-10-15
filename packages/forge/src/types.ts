@@ -2,15 +2,18 @@ import type {
   PullRequestAction,
   PullRequestActionResult,
   PullRequestDetail,
+  PullRequestListResult,
 } from '@lookingglass/shared/forge'
 import type { ParsedRemote } from './remote'
-import type { CommandRun } from './run'
 
 export interface PullRequestQuery {
   cwd: string
   remote: ParsedRemote
   branch: string
-  run: CommandRun
+  /** GitHub API token, or null when none was found. */
+  token: string | null
+  /** HTTP client. Tests pass a fake; the app passes the global `fetch`. */
+  fetch: typeof fetch
 }
 
 /**
@@ -20,6 +23,8 @@ export interface PullRequestQuery {
 export interface Forge {
   id: string
   matches(remote: ParsedRemote): boolean
+  /** Open pull requests, newest first. */
+  list(query: PullRequestQuery): Promise<PullRequestListResult>
   pullRequest(query: PullRequestQuery): Promise<PullRequestDetail | null>
   /** Acts on pull request `number`. Failures are a result, never a throw. */
   act(query: PullRequestQuery, number: number, action: PullRequestAction): Promise<PullRequestActionResult>

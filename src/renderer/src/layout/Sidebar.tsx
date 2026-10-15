@@ -1,10 +1,11 @@
 import type { LucideIcon } from 'lucide-react'
-import { Bot, Files, GitBranch, History, Search, Settings } from 'lucide-react'
+import { Bot, Files, GitBranch, GitPullRequest, History, Search, Settings } from 'lucide-react'
 import type { MenuCommand } from '@lookingglass/shared/ipc'
 import { AgentsSidebar } from '../agent/AgentPanel'
 import { CommitsPanel } from '../git/CommitsPanel'
 import { Explorer } from '../explorer/Explorer'
 import { GitPanel } from '../git/GitPanel'
+import { PullRequestsPanel } from '../git/PullRequestsPanel'
 import { SearchPanel } from '../search/SearchPanel'
 import { useAgents } from '../store/agents'
 import { useEditor } from '../store/editor'
@@ -18,6 +19,7 @@ const views: Array<{ id: SidebarView; label: string; icon: LucideIcon; command: 
   { id: 'search', label: 'Search', icon: Search, command: 'show-search' },
   { id: 'git', label: 'Source Control', icon: GitBranch, command: 'show-git' },
   { id: 'commits', label: 'Commits', icon: History, command: 'show-commits' },
+  { id: 'pullRequests', label: 'Pull Requests', icon: GitPullRequest, command: 'show-pull-requests' },
   { id: 'agents', label: 'Agents', icon: Bot, command: 'show-agents' },
 ]
 
@@ -88,6 +90,9 @@ export function Sidebar() {
       </div>
       <div className={current === 'commits' ? 'h-full' : 'hidden'}>
         <CommitsPanel />
+      </div>
+      <div className={current === 'pullRequests' ? 'h-full' : 'hidden'}>
+        <PullRequestsPanel />
       </div>
       <div className={current === 'agents' ? 'h-full' : 'hidden'}>
         <AgentsSidebar />

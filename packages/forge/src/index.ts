@@ -1,5 +1,5 @@
 export { GithubForge } from './github'
 export { parseRemote, type ParsedRemote } from './remote'
 export { forgeFor } from './registry'
-export { runCommand, type CommandResult, type CommandRun } from './run'
+export { resolveGithubToken } from './token'
 export type { Forge, PullRequestQuery } from './types'
