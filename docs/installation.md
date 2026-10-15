@@ -12,6 +12,16 @@ Grab the latest build from [GitHub Releases](https://github.com/NietThijmen/look
 
 Releases may be unsigned if the maintainer had no signing certificates available. On Windows, choose **More info → Run anyway** in SmartScreen. On macOS, see below.
 
+### Windows
+
+The install script downloads the latest release (x64 only) and runs its installer silently. It installs for the current user, so it needs no administrator rights. Run it in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/NietThijmen/looking-glass/main/installer/windows.ps1 | iex
+```
+
+[Read the script](../installer/windows.ps1) before piping it to `iex`. It only downloads from this project's GitHub Releases.
+
 ### Linux
 
 The install script downloads the latest AppImage (x86_64 only), puts a `lookingglass` command in `~/.local/bin` and adds an application menu entry:
