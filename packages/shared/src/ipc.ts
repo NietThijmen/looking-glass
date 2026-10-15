@@ -38,6 +38,7 @@ import type {
   PullRequestAction,
   PullRequestActionResult,
   PullRequestDetail,
+  PullRequestListResult,
   PullRequestSummary,
 } from './forge'
 import type { ReviewEntry } from './review'
@@ -50,6 +51,7 @@ export type {
   PullRequestDetail,
   PullRequestFile,
   PullRequestFileStatus,
+  PullRequestListResult,
   PullRequestSummary,
 } from './forge'
 
@@ -227,7 +229,7 @@ export interface InvokeContract {
   /** Open pull request for the current branch, or null when there isn't one. */
   'git:pullRequest': { args: []; result: PullRequestDetail | null }
   /** Open pull requests of the current branch's upstream repo. */
-  'git:pullRequests': { args: []; result: PullRequestSummary[] }
+  'git:pullRequests': { args: []; result: PullRequestListResult }
   /** Fetch a pull request's branch and switch to it. */
   'git:checkoutPullRequest': {
     args: [pullRequest: Pick<PullRequestSummary, 'number' | 'head' | 'fromFork'>]
@@ -396,7 +398,7 @@ export interface LookingglassApi {
     push(): Promise<GitPushResult>
     /** Open pull request for the current branch, or null. A missing GitHub token is null. */
     pullRequest(): Promise<PullRequestDetail | null>
-    pullRequests(): Promise<PullRequestSummary[]>
+    pullRequests(): Promise<PullRequestListResult>
     checkoutPullRequest(
       pullRequest: Pick<PullRequestSummary, 'number' | 'head' | 'fromFork'>,
     ): Promise<GitCheckoutResult>

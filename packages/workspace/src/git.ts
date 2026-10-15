@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { pullRequestBranch } from '@lookingglass/shared/forge'
 import type {
   GitCheckoutResult,
   GitCommitResult,
@@ -201,10 +202,11 @@ export class GitService {
     pullRequest: { number: number; head: string; fromFork: boolean },
   ): Promise<GitCheckoutResult> {
     const { number, head, fromFork } = pullRequest
+    const branch = pullRequestBranch(pullRequest)
     try {
       if (fromFork) {
         await git(root, ['fetch', 'origin', `pull/${number}/head`])
-        await git(root, ['checkout', '-B', `pr-${number}`, 'FETCH_HEAD'])
+        await git(root, ['checkout', '-B', branch, 'FETCH_HEAD'])
       } else {
         await git(root, ['fetch', 'origin', `+refs/heads/${head}:refs/remotes/origin/${head}`])
         const local = await git(root, ['branch', '--list', head])

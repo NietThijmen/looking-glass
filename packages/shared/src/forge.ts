@@ -61,6 +61,15 @@ export interface PullRequestSummary {
   fromFork: boolean
 }
 
+/** Open pull requests, or why they could not be listed. */
+export type PullRequestListResult =
+  { ok: true; pullRequests: PullRequestSummary[] } | { ok: false; error: string }
+
+/** The local branch checking out a pull request leaves you on. */
+export function pullRequestBranch(pr: Pick<PullRequestSummary, 'number' | 'head' | 'fromFork'>): string {
+  return pr.fromFork ? `pr-${pr.number}` : pr.head
+}
+
 export type PullRequestMergeMethod = 'merge' | 'squash' | 'rebase'
 
 /** A change the pull-request tab asks the forge to make. */

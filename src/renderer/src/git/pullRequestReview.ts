@@ -1,18 +1,13 @@
-import type { PullRequestSummary } from '@lookingglass/shared/forge'
+import { pullRequestBranch, type PullRequestSummary } from '@lookingglass/shared/forge'
 import { thermoNuclearCodeQualityReview } from '@lookingglass/skills'
 import { useAgents, type Attachment } from '../store/agents'
 import { useWorkspace } from '../store/workspace'
 
 type Checkout = Pick<PullRequestSummary, 'number' | 'head' | 'fromFork'>
 
-/** The branch `checkoutPullRequest` leaves you on. */
-export function localBranch(pr: Checkout): string {
-  return pr.fromFork ? `pr-${pr.number}` : pr.head
-}
-
 /** Switch to the pull request's branch unless it is already there. Resolves to an error message, or null. */
 export async function checkoutPullRequest(pr: Checkout): Promise<string | null> {
-  if (useWorkspace.getState().git?.branch === localBranch(pr)) return null
+  if (useWorkspace.getState().git?.branch === pullRequestBranch(pr)) return null
   const result = await window.lookingglass.git.checkoutPullRequest(pr)
   return result.ok ? null : (result.error ?? 'Checkout failed')
 }

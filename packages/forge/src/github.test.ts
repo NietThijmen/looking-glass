@@ -207,3 +207,27 @@ describe('GithubForge', () => {
     expect(await GithubForge.pullRequest({ ...base, fetch: throwing })).toBeNull()
   })
 })
+
+describe('GithubForge.list', () => {
+  it('lists open pull requests and flags forks', async () => {
+    const fork = { ...PULL, number: 13, head: { ref: 'x', sha: 's', repo: { full_name: 'zed/app' } } }
+    const same = {
+      ...PULL,
+      head: { ...PULL.head, repo: { full_name: 'acme/app' } },
+      base: { ref: 'main', repo: { full_name: 'acme/app' } },
+    }
+    const { fetch } = scripted({ '/pulls?state=open': () => json([same, { ...fork, base: same.base }]) })
+    const result = await GithubForge.list({ ...base, fetch })
+    expect(result.ok && result.pullRequests.map((pr) => [pr.number, pr.fromFork])).toEqual([
+      [12, false],
+      [13, true],
+    ])
+  })
+
+  it('reports why listing failed', async () => {
+    expect(await GithubForge.list({ ...base, token: null, fetch: scripted({}).fetch })).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('token'),
+    })
+  })
+})

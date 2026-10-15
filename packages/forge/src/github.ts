@@ -20,17 +20,13 @@ interface ListedFile {
   deletions: number
 }
 
+type PullFields = Omit<PullRequestSummary, 'fromFork'>
+
 interface Pull {
-  number: number
-  nodeId: string
-  title: unknown
-  body: unknown
-  url: unknown
-  author: unknown
-  base: unknown
-  head: unknown
+  fields: PullFields
+  fromFork: boolean
+  body: string
   headSha: string
-  isDraft: unknown
 }
 
 /** GitHub.com only. A missing token, a failed request, or no open pull request is null. */
@@ -41,10 +37,10 @@ export const GithubForge: Forge = {
   },
   async list(query) {
     try {
-      const open = await getPages(query, `${repoPath(query)}/pulls?state=open&sort=created&direction=desc`)
-      return open.flatMap((item) => summarize(item) ?? [])
-    } catch {
-      return []
+      const open = await getPages(query, `${repoUrl(query)}/pulls?state=open&sort=created&direction=desc`)
+      return { ok: true, pullRequests: open.flatMap((item) => summarize(item) ?? []) }
+    } catch (error) {
+      return { ok: false, error: errorText(error) }
     }
   },
   async pullRequest(query) {
@@ -56,27 +52,30 @@ export const GithubForge: Forge = {
   },
   async act(query, number, action) {
     try {
-      return await runAction(query, number, action)
+      await runAction(query, number, action)
+      return { ok: true }
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      return { ok: false, error: errorText(error) }
     }
   },
 }
 
-class GithubError extends Error {}
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
 
-function repoPath(query: PullRequestQuery): string {
-  return `/repos/${encodeURIComponent(query.remote.owner)}/${encodeURIComponent(query.remote.repo)}`
+function repoUrl(query: PullRequestQuery): string {
+  return `${API}/repos/${encodeURIComponent(query.remote.owner)}/${encodeURIComponent(query.remote.repo)}`
 }
 
 async function request(
   query: PullRequestQuery,
   method: string,
-  path: string,
+  url: string,
   options: { body?: unknown; accept?: string } = {},
 ): Promise<Response> {
-  if (!query.token) throw new GithubError('No GitHub token. Run `gh auth login` or set GH_TOKEN.')
-  const response = await query.fetch(path.startsWith('http') ? path : `${API}${path}`, {
+  if (!query.token) throw new Error('No GitHub token. Run `gh auth login` or set GH_TOKEN.')
+  const response = await query.fetch(url, {
     method,
     headers: {
       Accept: options.accept ?? 'application/vnd.github+json',
@@ -86,7 +85,7 @@ async function request(
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   })
-  if (!response.ok) throw new GithubError(await errorMessage(response))
+  if (!response.ok) throw new Error(await errorMessage(response))
   return response
 }
 
@@ -101,17 +100,23 @@ async function errorMessage(response: Response): Promise<string> {
   return text.trim() || `GitHub returned ${response.status}`
 }
 
-async function getJson(query: PullRequestQuery, path: string): Promise<unknown> {
-  return (await request(query, 'GET', path)).json()
+async function getJson(query: PullRequestQuery, url: string): Promise<unknown> {
+  return (await request(query, 'GET', url)).json()
 }
 
-/** Every page of a list endpoint, capped so a huge pull request cannot loop forever. */
-async function getPages(query: PullRequestQuery, path: string, key?: string): Promise<unknown[]> {
+/**
+ * Every page of a list endpoint, capped so a huge pull request cannot loop forever.
+ * `select` picks the array out of a response that wraps it.
+ */
+async function getPages(
+  query: PullRequestQuery,
+  url: string,
+  select: (json: unknown) => unknown = (json) => json,
+): Promise<unknown[]> {
   const items: unknown[] = []
-  const joiner = path.includes('?') ? '&' : '?'
+  const joiner = url.includes('?') ? '&' : '?'
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const json = await getJson(query, `${path}${joiner}per_page=${PER_PAGE}&page=${page}`)
-    const list = key && json && typeof json === 'object' ? (json as Record<string, unknown>)[key] : json
+    const list = select(await getJson(query, `${url}${joiner}per_page=${PER_PAGE}&page=${page}`))
     if (!Array.isArray(list)) break
     items.push(...list)
     if (list.length < PER_PAGE) break
@@ -119,25 +124,22 @@ async function getPages(query: PullRequestQuery, path: string, key?: string): Pr
   return items
 }
 
-async function runAction(
-  query: PullRequestQuery,
-  number: number,
-  action: PullRequestAction,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const repo = repoPath(query)
+async function runAction(query: PullRequestQuery, number: number, action: PullRequestAction): Promise<void> {
+  const pullUrl = `${repoUrl(query)}/pulls/${number}`
   switch (action.kind) {
     case 'editBody':
-      await request(query, 'PATCH', `${repo}/pulls/${number}`, { body: { body: action.body } })
+      await request(query, 'PATCH', pullUrl, { body: { body: action.body } })
       break
     case 'comment':
-      await request(query, 'POST', `${repo}/issues/${number}/comments`, { body: { body: action.body } })
+      await request(query, 'POST', `${repoUrl(query)}/issues/${number}/comments`, {
+        body: { body: action.body },
+      })
       break
     case 'draft':
     case 'ready': {
       // The REST API cannot toggle draft state; only GraphQL can.
-      const pull = asRecord(await getJson(query, `${repo}/pulls/${number}`))
-      const nodeId = asString(pull.node_id)
-      if (!nodeId) throw new GithubError('GitHub did not return the pull request id.')
+      const nodeId = asString(asRecord(await getJson(query, pullUrl)).node_id)
+      if (!nodeId) throw new Error('GitHub did not return the pull request id.')
       const mutation = action.kind === 'draft' ? 'convertPullRequestToDraft' : 'markPullRequestReadyForReview'
       const response = await request(query, 'POST', `${API}/graphql`, {
         body: {
@@ -147,81 +149,58 @@ async function runAction(
       })
       const errors = asRecord(await response.json()).errors
       if (Array.isArray(errors) && errors.length > 0) {
-        throw new GithubError(asString(asRecord(errors[0]).message) || 'GitHub rejected the request.')
+        throw new Error(asString(asRecord(errors[0]).message) || 'GitHub rejected the request.')
       }
       break
     }
     case 'merge':
-      await request(query, 'PUT', `${repo}/pulls/${number}/merge`, { body: { merge_method: action.method } })
+      await request(query, 'PUT', `${pullUrl}/merge`, { body: { merge_method: action.method } })
       break
   }
-  return { ok: true }
 }
 
 async function loadPullRequest(query: PullRequestQuery): Promise<PullRequestDetail | null> {
-  const repo = repoPath(query)
+  const repo = repoUrl(query)
   const head = encodeURIComponent(`${query.remote.owner}:${query.branch}`)
   const open = await getJson(query, `${repo}/pulls?state=open&head=${head}&per_page=1`)
   const pull = Array.isArray(open) ? parsePull(open[0]) : null
   if (!pull) return null
+  const { number } = pull.fields
 
   const [files, diff, runs, statuses, comments, reviews] = await Promise.all([
-    getPages(query, `${repo}/pulls/${pull.number}/files`).catch(() => []),
-    request(query, 'GET', `${repo}/pulls/${pull.number}`, { accept: 'application/vnd.github.v3.diff' })
+    getPages(query, `${repo}/pulls/${number}/files`).catch(() => []),
+    request(query, 'GET', `${repo}/pulls/${number}`, { accept: 'application/vnd.github.v3.diff' })
       .then((response) => response.text())
       .catch(() => ''),
-    getPages(query, `${repo}/commits/${pull.headSha}/check-runs`, 'check_runs').catch(() => []),
+    getPages(query, `${repo}/commits/${pull.headSha}/check-runs`, (json) => asRecord(json).check_runs).catch(
+      () => [],
+    ),
     getJson(query, `${repo}/commits/${pull.headSha}/status`).catch(() => null),
-    getPages(query, `${repo}/issues/${pull.number}/comments`).catch(() => []),
-    getPages(query, `${repo}/pulls/${pull.number}/reviews`).catch(() => []),
+    getPages(query, `${repo}/issues/${number}/comments`).catch(() => []),
+    getPages(query, `${repo}/pulls/${number}/reviews`).catch(() => []),
   ])
   const patches = diff ? splitDiff(diff) : new Map<string, SplitPatch>()
   const contexts = asRecord(statuses).statuses
 
   return {
     forgeId: GITHUB_ID,
-    number: pull.number,
-    title: asString(pull.title),
-    body: asString(pull.body),
-    url: asString(pull.url),
-    author: authorLogin(pull.author),
-    base: asString(pull.base),
-    head: asString(pull.head),
-    isDraft: pull.isDraft === true,
+    ...pull.fields,
+    body: pull.body,
     files: buildFiles(asFiles(files), patches),
     checks: [
-      ...asChecks(runs.map(runCheck)),
-      ...asChecks(Array.isArray(contexts) ? contexts.map(statusCheck) : []),
+      ...runs.flatMap((run) => runCheck(run) ?? []),
+      ...(Array.isArray(contexts) ? contexts.map(statusCheck) : []),
     ],
-    comments: asComments(
-      comments.map((item) => {
-        const raw = asRecord(item)
-        return { author: raw.user, body: raw.body, createdAt: raw.created_at }
-      }),
-      reviews.map((item) => {
-        const raw = asRecord(item)
-        return { author: raw.user, body: raw.body, state: raw.state, submittedAt: raw.submitted_at }
-      }),
-    ),
+    comments: mergeComments([
+      ...comments.map(issueComment),
+      ...reviews.flatMap((review) => reviewComment(review) ?? []),
+    ]),
   }
 }
 
 function summarize(value: unknown): PullRequestSummary | null {
   const pull = parsePull(value)
-  if (!pull) return null
-  const raw = asRecord(value)
-  const headRepo = asString(asRecord(asRecord(raw.head).repo).full_name)
-  const baseRepo = asString(asRecord(asRecord(raw.base).repo).full_name)
-  return {
-    number: pull.number,
-    title: asString(pull.title),
-    author: authorLogin(pull.author),
-    base: asString(pull.base),
-    head: asString(pull.head),
-    isDraft: pull.isDraft === true,
-    url: asString(pull.url),
-    fromFork: headRepo !== baseRepo,
-  }
+  return pull && { ...pull.fields, fromFork: pull.fromFork }
 }
 
 function parsePull(value: unknown): Pull | null {
@@ -229,30 +208,46 @@ function parsePull(value: unknown): Pull | null {
   if (typeof raw.number !== 'number') return null
   if (asString(raw.state).toLowerCase() !== 'open') return null
   const head = asRecord(raw.head)
+  const base = asRecord(raw.base)
   return {
-    number: raw.number,
-    nodeId: asString(raw.node_id),
-    title: raw.title,
-    body: raw.body,
-    url: raw.html_url,
-    author: raw.user,
-    base: asRecord(raw.base).ref,
-    head: head.ref,
+    fields: {
+      number: raw.number,
+      title: asString(raw.title),
+      author: authorLogin(raw.user),
+      base: asString(base.ref),
+      head: asString(head.ref),
+      isDraft: raw.draft === true,
+      url: asString(raw.html_url),
+    },
+    fromFork: asString(asRecord(head.repo).full_name) !== asString(asRecord(base.repo).full_name),
+    body: asString(raw.body),
     headSha: asString(head.sha),
-    isDraft: raw.draft,
   }
 }
 
-/** REST check run, reshaped to what `asCheck` reads. */
-function runCheck(item: unknown): unknown {
+function runCheck(item: unknown): PullRequestCheck | null {
   const raw = asRecord(item)
-  return { name: raw.name, status: raw.status, conclusion: raw.conclusion, detailsUrl: raw.html_url }
+  const name = asString(raw.name)
+  if (!name) return null
+  return {
+    name,
+    status: mapRunStatus(asString(raw.status)),
+    conclusion: mapConclusion(raw.conclusion),
+    url: asString(raw.html_url),
+  }
 }
 
-/** REST commit status, reshaped to what `asCheck` reads. */
-function statusCheck(item: unknown): unknown {
+function statusCheck(item: unknown): PullRequestCheck {
   const raw = asRecord(item)
-  return { __typename: 'StatusContext', context: raw.context, state: raw.state, targetUrl: raw.target_url }
+  const state = asString(raw.state).toUpperCase()
+  const conclusion =
+    state === 'SUCCESS' ? 'success' : state === 'FAILURE' || state === 'ERROR' ? 'failure' : null
+  const status: PullRequestCheck['status'] = conclusion
+    ? 'completed'
+    : state === 'PENDING' || state === 'EXPECTED'
+      ? 'queued'
+      : 'unknown'
+  return { name: asString(raw.context) || 'status', status, conclusion, url: asString(raw.target_url) }
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -302,51 +297,8 @@ function asFiles(value: unknown): ListedFile[] {
   return files
 }
 
-function asChecks(value: unknown): PullRequestCheck[] {
-  if (!Array.isArray(value)) return []
-  const checks: PullRequestCheck[] = []
-  for (const item of value) {
-    const check = asCheck(item)
-    if (check) checks.push(check)
-  }
-  return checks
-}
-
-function asCheck(item: unknown): PullRequestCheck | null {
-  if (!item || typeof item !== 'object') return null
-  const raw = item as Record<string, unknown>
-  const typename = typeof raw.__typename === 'string' ? raw.__typename : ''
-  if (typename === 'StatusContext' || (typeof raw.context === 'string' && typeof raw.name !== 'string')) {
-    return statusContext(raw)
-  }
-  if (typeof raw.name !== 'string' || !raw.name) return null
-  return {
-    name: raw.name,
-    status: mapRunStatus(typeof raw.status === 'string' ? raw.status : undefined),
-    conclusion: mapConclusion(raw.conclusion),
-    url: typeof raw.detailsUrl === 'string' ? raw.detailsUrl : '',
-  }
-}
-
-function statusContext(raw: Record<string, unknown>): PullRequestCheck {
-  const state = typeof raw.state === 'string' ? raw.state.toUpperCase() : ''
-  const conclusion =
-    state === 'SUCCESS' ? 'success' : state === 'FAILURE' || state === 'ERROR' ? 'failure' : null
-  const status: PullRequestCheck['status'] = conclusion
-    ? 'completed'
-    : state === 'PENDING' || state === 'EXPECTED'
-      ? 'queued'
-      : 'unknown'
-  return {
-    name: typeof raw.context === 'string' && raw.context ? raw.context : 'status',
-    status,
-    conclusion,
-    url: typeof raw.targetUrl === 'string' ? raw.targetUrl : '',
-  }
-}
-
-function mapRunStatus(status: string | undefined): PullRequestCheck['status'] {
-  switch ((status ?? '').toUpperCase()) {
+function mapRunStatus(status: string): PullRequestCheck['status'] {
+  switch (status.toUpperCase()) {
     case 'QUEUED':
     case 'PENDING':
     case 'WAITING':
@@ -367,34 +319,33 @@ function mapConclusion(value: unknown): string | null {
   return trimmed ? trimmed : null
 }
 
-/** Comments and reviews merged by time. A review with no body and no verdict worth showing is dropped. */
-function asComments(comments: unknown, reviews: unknown): PullRequestComment[] {
-  const merged: PullRequestComment[] = []
-  for (const item of Array.isArray(comments) ? comments : []) {
-    if (!item || typeof item !== 'object') continue
-    const raw = item as Record<string, unknown>
-    merged.push({
-      author: authorLogin(raw.author),
-      body: asString(raw.body),
-      createdAt: asString(raw.createdAt),
-      review: null,
-    })
+function issueComment(item: unknown): PullRequestComment {
+  const raw = asRecord(item)
+  return {
+    author: authorLogin(raw.user),
+    body: asString(raw.body),
+    createdAt: asString(raw.created_at),
+    review: null,
   }
-  for (const item of Array.isArray(reviews) ? reviews : []) {
-    if (!item || typeof item !== 'object') continue
-    const raw = item as Record<string, unknown>
-    const state = asString(raw.state).toLowerCase()
-    const body = asString(raw.body)
-    if (!body.trim() && (state === 'commented' || state === 'pending' || !state)) continue
-    merged.push({
-      author: authorLogin(raw.author),
-      body,
-      createdAt: asString(raw.submittedAt),
-      review: state || null,
-    })
+}
+
+/** A review with no body and no verdict worth showing is dropped. */
+function reviewComment(item: unknown): PullRequestComment | null {
+  const raw = asRecord(item)
+  const state = asString(raw.state).toLowerCase()
+  const body = asString(raw.body)
+  if (!body.trim() && (state === 'commented' || state === 'pending' || !state)) return null
+  return {
+    author: authorLogin(raw.user),
+    body,
+    createdAt: asString(raw.submitted_at),
+    review: state || null,
   }
-  // ISO timestamps sort as strings; the sort is stable so undated entries keep their order.
-  return merged.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
+}
+
+/** Oldest first. ISO timestamps sort as strings; the sort is stable so undated entries keep their order. */
+function mergeComments(comments: PullRequestComment[]): PullRequestComment[] {
+  return comments.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
 }
 
 function authorLogin(author: unknown): string {

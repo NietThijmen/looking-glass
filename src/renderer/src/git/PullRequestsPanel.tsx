@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { PullRequestSummary } from '@lookingglass/shared/forge'
+import {
+  pullRequestBranch,
+  type PullRequestListResult,
+  type PullRequestSummary,
+} from '@lookingglass/shared/forge'
 import { useWorkspace } from '../store/workspace'
-import { checkoutPullRequest, localBranch, reviewPullRequest } from './pullRequestReview'
+import { checkoutPullRequest, reviewPullRequest } from './pullRequestReview'
 
 type Busy = { number: number; action: 'checkout' | 'review' }
 
@@ -65,7 +69,7 @@ export function PullRequestsPanel() {
   const git = useWorkspace((s) => s.git)
   const branch = git?.branch ?? null
   /** null until the first load finishes. */
-  const [pullRequests, setPullRequests] = useState<PullRequestSummary[] | null>(null)
+  const [list, setList] = useState<PullRequestListResult | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [busy, setBusy] = useState<Busy | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -73,8 +77,9 @@ export function PullRequestsPanel() {
   const load = useCallback(
     () =>
       window.lookingglass.git.pullRequests().then(
-        (list) => setPullRequests(list),
-        () => setPullRequests([]),
+        (result) => setList(result),
+        (error: unknown) =>
+          setList({ ok: false, error: error instanceof Error ? error.message : String(error) }),
       ),
     [],
   )
@@ -123,16 +128,18 @@ export function PullRequestsPanel() {
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {pullRequests === null ? (
+        {list === null ? (
           <div className="p-3 text-muted">Loading pull requests…</div>
-        ) : pullRequests.length === 0 ? (
-          <div className="p-3 text-muted">No open pull requests, or no GitHub token found (run `gh auth login` or set GH_TOKEN).</div>
+        ) : !list.ok ? (
+          <div className="p-3 text-red-400 select-text">{list.error}</div>
+        ) : list.pullRequests.length === 0 ? (
+          <div className="p-3 text-muted">No open pull requests.</div>
         ) : (
-          pullRequests.map((pr) => (
+          list.pullRequests.map((pr) => (
             <PullRequestRow
               key={pr.number}
               pr={pr}
-              current={branch === localBranch(pr)}
+              current={branch === pullRequestBranch(pr)}
               busy={busy?.number === pr.number ? busy.action : null}
               disabled={busy !== null}
               onCheckout={() => void run(pr, 'checkout')}
