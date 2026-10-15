@@ -2,14 +2,9 @@ import type { McpServer } from '@agentclientprotocol/sdk'
 import { app, BrowserWindow, dialog } from 'electron'
 import os from 'node:os'
 import path from 'node:path'
-import {
-  AgentManager,
-  PermissionService,
-  readWorkspaceSubagentSettings,
-  SubagentService,
-} from '@lookingglass/acp'
-import type { McpHandle } from '../mcp/http'
-import { startSubagentMcpServer } from '../mcp/subagentMcpServer'
+import { AgentManager, PermissionService, SubagentService } from '@lookingglass/acp'
+import { readWorkspaceSubagentSettings } from '@lookingglass/acp/subagentConfig'
+import { startSubagentMcpServer, type SubagentMcpHandle } from '../mcp/subagentMcpServer'
 import { describeMcpServers, mcpServersHash, readWorkspaceMcpServers } from '@lookingglass/acp/mcpConfig'
 import { Checkpoints, ReviewService } from '@lookingglass/review'
 import { EditorState } from '@lookingglass/workspace'
@@ -35,7 +30,7 @@ const permissions = new PermissionService(
   (requestId) => broadcast('agent:permissionResolved', { requestId }),
 )
 let mcp: EditorMcpHandle | null = null
-let subagentMcp: McpHandle | null = null
+let subagentMcp: SubagentMcpHandle | null = null
 /** The built-in MCP server's address (for smoke tests that call its tools directly). */
 export const editorMcp = (): EditorMcpHandle | null => mcp
 
@@ -98,14 +93,12 @@ async function askToAllowMcpServers(root: string, servers: McpServer[]): Promise
   return response === 0
 }
 
-export const agents: AgentManager = new AgentManager({
+export const agents = new AgentManager({
   definitions: loadAgentDefinitions,
   workspace,
   editor,
   permissions,
   mcp: () => mcp,
-  subagentMcp: async (): Promise<McpHandle | null> =>
-    subagentMcp && (await subagents.enabled()) ? subagentMcp : null,
   workspaceMcpServers,
   onStatus: (agentId, status) => broadcast('agent:status', { agentId, status }),
   onSessionUpdate: (notification) => {
@@ -118,17 +111,14 @@ export const agents: AgentManager = new AgentManager({
   onAgentWrite: (path) => broadcast('editor:reloadFile', { path }),
 })
 
-const subagents: SubagentService = new SubagentService({
+const subagents = new SubagentService({
   agents,
   settings: async () => (workspace.root ? readWorkspaceSubagentSettings(workspace.root) : null),
 })
 
 export async function startAgentServices(): Promise<void> {
   try {
-    subagentMcp = await startSubagentMcpServer({
-      subagents,
-      sessionForCaller: (caller) => agents.sessionForCaller(caller),
-    })
+    subagentMcp = await startSubagentMcpServer(subagents)
   } catch (error) {
     console.error('[subagents] failed to start sub-agent MCP server', error)
   }
@@ -150,6 +140,7 @@ export async function startAgentServices(): Promise<void> {
   }
   onWorkspaceWillChange(() => {
     agents.disposeAll()
+    subagentMcp?.revokeAll()
     editor.reset()
     review.reset()
     void diagnostics.dispose()
@@ -169,6 +160,11 @@ export async function stopAgentServices(): Promise<void> {
   subagentMcp = null
 }
 
+/** The sub-agent server for a chat session, when this workspace has sub-agents switched on. */
+async function subagentGrant() {
+  return subagentMcp && (await subagents.enabled()) ? subagentMcp.grant() : null
+}
+
 export function registerAgentHandlers(): void {
   handle('editor:snapshot', (_e, snapshot) => {
     editor.update(snapshot)
@@ -178,9 +174,18 @@ export function registerAgentHandlers(): void {
 
   handle('agent:list', () => agents.list())
   handle('agent:status', (_e, agentId) => agents.status(agentId))
-  handle('agent:newSession', (_e, agentId) => agents.newSession(agentId))
+  handle('agent:newSession', async (_e, agentId) => {
+    const grant = await subagentGrant()
+    const result = await agents.newSession(agentId, grant ? [grant.server] : [])
+    if (!('authRequired' in result)) grant?.bind(result.sessionId)
+    return result
+  })
   handle('agent:listSessions', (_e, agentId) => agents.listSessions(agentId))
-  handle('agent:loadSession', (_e, agentId, sessionId) => agents.loadSession(agentId, sessionId))
+  handle('agent:loadSession', async (_e, agentId, sessionId) => {
+    const grant = await subagentGrant()
+    grant?.bind(sessionId)
+    return agents.loadSession(agentId, sessionId, grant ? [grant.server] : [])
+  })
   handle('agent:authenticate', (_e, agentId, methodId) => agents.authenticate(agentId, methodId))
   handle('agent:prompt', (_e, sessionId, prompt) => agents.prompt(sessionId, prompt))
   handle('agent:cancel', async (_e, sessionId) => {

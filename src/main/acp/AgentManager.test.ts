@@ -262,7 +262,7 @@ describe('SubagentService with the fake agent', () => {
     await vi.waitFor(() => expect(prompts).toHaveLength(1))
     const request = subagents.forParent(prompts[0]!)
     expect(request.sessionId).toBe('parent')
-    expect(request.toolCall.title).toMatch(/^Sub-agent "fake": /)
+    expect(request.subagent).toBe('fake')
     await subagents.cancelChildren('parent')
     expect((await running).stopReason).toBe('cancelled')
   })

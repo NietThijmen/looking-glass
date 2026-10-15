@@ -349,6 +349,9 @@ importers:
       '@lookingglass/shared':
         specifier: workspace:*
         version: link:../shared
+      zod:
+        specifier: 4.6.6
+        version: 4.6.6
 
   packages/forge:
     dependencies:
@@ -368,13 +371,13 @@ importers:
         specifier: 9.0.0
         version: 9.0.0
 
-  packages/skills: {}
-
   packages/shared:
     dependencies:
       '@agentclientprotocol/sdk':
         specifier: 1.8.0
         version: 1.8.0(zod@4.6.6)
+
+  packages/skills: {}
 
   packages/workspace:
     dependencies:

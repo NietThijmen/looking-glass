@@ -7,11 +7,13 @@
     ".": "./src/index.ts",
     "./childEnv": "./src/childEnv.ts",
     "./mcpConfig": "./src/mcpConfig.ts",
-    "./registry": "./src/registry.ts"
+    "./registry": "./src/registry.ts",
+    "./subagentConfig": "./src/subagentConfig.ts"
   },
   "dependencies": {
     "@lookingglass/shared": "workspace:*",
     "@agentclientprotocol/claude-agent-acp": "0.89.1",
-    "@agentclientprotocol/sdk": "1.8.0"
+    "@agentclientprotocol/sdk": "1.8.0",
+    "zod": "4.6.6"
   }
 }

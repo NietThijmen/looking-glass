@@ -1,13 +1,22 @@
+import type { McpServer as SessionMcpServer } from '@agentclientprotocol/sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { CALLER_HEADER, type SubagentService } from '@lookingglass/acp'
+import type { SubagentService } from '@lookingglass/acp'
 import { serveMcp, type McpHandle } from './http'
 import { ToolSet } from './toolSet'
 
-export interface SubagentMcpDeps {
-  subagents: SubagentService
-  /** The session behind a caller header (see `AgentManager.sessionForCaller`). */
-  sessionForCaller(caller: string): string | undefined
+/** Tells the server which session is calling; each session gets its own value. */
+const CALLER_HEADER = 'x-lookingglass-caller'
+
+export interface SubagentMcpHandle extends McpHandle {
+  /**
+   * The server entry for one chat session. `bind` it to the session's id once known;
+   * requests carrying an unbound or revoked entry are refused.
+   */
+  grant(): { server: SessionMcpServer; bind(sessionId: string): void }
+  /** Forget every session, e.g. when the workspace changes. */
+  revokeAll(): void
 }
 
 const text = (value: unknown, isError = false) => ({
@@ -23,12 +32,10 @@ const PREAMBLE =
 const POSTAMBLE =
   "Sub-agents work in the same project folder; their edits and commands still need the user's permission. They can't delegate further."
 
-function buildServer(deps: SubagentMcpDeps, caller: string | undefined): McpServer {
-  const { subagents } = deps
+function buildServer(subagents: SubagentService, parentSessionId: string | undefined): McpServer {
   const parent = () => {
-    const sessionId = caller && deps.sessionForCaller(caller)
-    if (!sessionId) throw new Error('This session is not allowed to start sub-agents.')
-    return sessionId
+    if (!parentSessionId) throw new Error('This session is not allowed to start sub-agents.')
+    return parentSessionId
   }
   const tools = new ToolSet()
   tools.add(
@@ -69,34 +76,14 @@ function buildServer(deps: SubagentMcpDeps, caller: string | undefined): McpServ
   tools.add(
     'subagent_list',
     {
-      usage: 'The targets you can delegate to, and your sub-agents that are still running.',
-      description:
-        'Configured targets, the agent each maps to, whether it is available, and running sub-agents.',
+      usage: 'The targets you can delegate to.',
+      description: 'Configured targets, the agent each maps to, and whether it is available.',
       inputSchema: {},
     },
-    async () => text({ targets: await subagents.targets(), running: subagents.running(parent()) }),
-  )
-  tools.add(
-    'subagent_cancel',
-    {
-      description: 'Cancel a running sub-agent by the id from subagent_list.',
-      inputSchema: { id: z.string() },
+    async () => {
+      parent()
+      return text(await subagents.targets())
     },
-    async ({ id }) => {
-      const own = subagents.running(parent()).some((r) => r.id === id)
-      return own && (await subagents.cancel(id))
-        ? text(`Cancelled ${id}`)
-        : text(`No running sub-agent ${id}`, true)
-    },
-  )
-  tools.add(
-    'subagent_capabilities',
-    {
-      description:
-        'What each target agent supports (prompt content types, MCP transports, resuming sessions). Starts agents that are not running yet.',
-      inputSchema: {},
-    },
-    async () => text(await subagents.capabilities()),
   )
   const server = new McpServer(
     { name: 'subagents', version: '0.0.1' },
@@ -107,9 +94,27 @@ function buildServer(deps: SubagentMcpDeps, caller: string | undefined): McpServ
 }
 
 /** Sub-agent tools for agent sessions in workspaces that switch them on. */
-export function startSubagentMcpServer(deps: SubagentMcpDeps): Promise<McpHandle> {
-  return serveMcp('subagents', (req) => {
-    const caller = req.headers[CALLER_HEADER.toLowerCase()]
-    return buildServer(deps, typeof caller === 'string' ? caller : undefined)
+export async function startSubagentMcpServer(subagents: SubagentService): Promise<SubagentMcpHandle> {
+  /** Caller header value → the session it was granted to. */
+  const parents = new Map<string, string>()
+  const handle = await serveMcp('subagents', (req) => {
+    const caller = req.headers[CALLER_HEADER]
+    return buildServer(subagents, typeof caller === 'string' ? parents.get(caller) : undefined)
   })
+  return {
+    ...handle,
+    grant() {
+      const caller = randomUUID()
+      return {
+        server: {
+          type: 'http',
+          name: 'subagents',
+          url: handle.url,
+          headers: [...handle.headers, { name: CALLER_HEADER, value: caller }],
+        },
+        bind: (sessionId) => void parents.set(caller, sessionId),
+      }
+    },
+    revokeAll: () => parents.clear(),
+  }
 }

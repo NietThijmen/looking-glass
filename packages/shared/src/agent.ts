@@ -76,6 +76,8 @@ export interface PermissionRequest {
   sessionId: string
   toolCall: ToolCallUpdate
   options: PermissionOption[]
+  /** The sub-agent target asking, when a sub-agent's request is shown in its parent's chat. */
+  subagent?: string
 }
 
 /** Reply to a permission request. `null` = dismissed (treated as cancelled). */

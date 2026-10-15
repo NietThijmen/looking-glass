@@ -1,7 +1,5 @@
 import type { SessionConfigOption, SessionNotification } from '@agentclientprotocol/sdk'
 import { randomUUID } from 'node:crypto'
-import fs from 'node:fs/promises'
-import path from 'node:path'
 import type {
   AgentSummary,
   AuthRequired,
@@ -10,92 +8,15 @@ import type {
   PermissionRequest,
   PromptResult,
 } from '@lookingglass/shared/agent'
-
-/** An agent, optionally with the model to switch its session to. */
-export interface AgentRef {
-  agentId: string
-  model: string | null
-}
-
-/** Short names for built-in agents. */
-const AGENT_ALIASES: Record<string, string> = { claude: 'claude-code' }
-
-/**
- * `@<agent>/<model>` or `@<agent>`, e.g. `@claude/claude-sonnet-5` or `@codex/gpt-5.5-astra`.
- * The leading `@` is optional; everything after the first `/` is the model.
- */
-export function parseAgentRef(ref: string): AgentRef | null {
-  const body = ref.trim().replace(/^@/, '')
-  const slash = body.indexOf('/')
-  const agent = (slash === -1 ? body : body.slice(0, slash)).trim()
-  const model = slash === -1 ? '' : body.slice(slash + 1).trim()
-  if (!agent || (slash !== -1 && !model)) return null
-  return { agentId: AGENT_ALIASES[agent] ?? agent, model: model || null }
-}
-
-export interface SubagentSettings {
-  enabled: boolean
-  /** Target name → agent ref (`@agent/model`, `@agent` or a bare agent id). */
-  targets: Record<string, string>
-  defaultTarget: string | null
-  timeoutSeconds: number
-}
-
-const DEFAULT_TIMEOUT_SECONDS = 600
-
-/**
- * `subagents` from `<workspace>/.lookingglass/settings.json`:
- *
- *   { "subagents": { "enabled": true, "targets": { "coder": "claude-code" }, "defaultTarget": "coder" } }
- *
- * Returns null when the section is missing or malformed.
- */
-export function parseSubagentSettings(settings: unknown): SubagentSettings | null {
-  const raw = (settings as { subagents?: unknown } | null)?.subagents
-  if (!raw || typeof raw !== 'object') return null
-  const s = raw as Record<string, unknown>
-  const targets: Record<string, string> = {}
-  if (s['targets'] && typeof s['targets'] === 'object') {
-    for (const [name, agentId] of Object.entries(s['targets'] as Record<string, unknown>)) {
-      if (typeof agentId === 'string' && parseAgentRef(agentId)) targets[name] = agentId.trim()
-      else console.warn(`[subagents] ignoring target "${name}": needs "@agent/model" or an agent id`)
-    }
-  }
-  const defaultTarget = typeof s['defaultTarget'] === 'string' ? s['defaultTarget'] : null
-  const timeout = s['timeoutSeconds']
-  return {
-    enabled: s['enabled'] === true,
-    targets,
-    defaultTarget: defaultTarget && defaultTarget in targets ? defaultTarget : null,
-    timeoutSeconds:
-      typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0
-        ? timeout
-        : DEFAULT_TIMEOUT_SECONDS,
-  }
-}
-
-export async function readWorkspaceSubagentSettings(root: string): Promise<SubagentSettings | null> {
-  let raw: string
-  try {
-    raw = await fs.readFile(path.join(root, '.lookingglass', 'settings.json'), 'utf8')
-  } catch {
-    return null
-  }
-  try {
-    return parseSubagentSettings(JSON.parse(raw))
-  } catch {
-    return null
-  }
-}
+import { parseAgentRef, type SubagentSettings } from './subagentConfig'
 
 /** The parts of `AgentManager` sub-agents use. */
 export interface SubagentAgents {
   list(): Promise<AgentSummary[]>
-  newSession(agentId: string, options: { subagent: true }): Promise<NewSessionResult | AuthRequired>
+  newSession(agentId: string): Promise<NewSessionResult | AuthRequired>
   prompt(sessionId: string, prompt: ContentBlock[]): Promise<PromptResult>
   cancel(sessionId: string): Promise<void>
   setConfigOption(sessionId: string, configId: string, value: string): Promise<SessionConfigOption[]>
-  capabilities(agentId: string): Promise<Record<string, unknown>>
 }
 
 export interface SubagentDeps {
@@ -168,23 +89,6 @@ export class SubagentService {
     })
   }
 
-  running(
-    parentSessionId?: string,
-  ): Array<{ id: string; target: string; agentId: string; model: string | null }> {
-    return [...this.#runs.values()]
-      .filter((r) => !parentSessionId || r.parentSessionId === parentSessionId)
-      .map(({ id, target, agentId, model }) => ({ id, target, agentId, model }))
-  }
-
-  async capabilities(): Promise<Array<SubagentTarget & { capabilities: Record<string, unknown> | null }>> {
-    return Promise.all(
-      (await this.targets()).map(async (t) => ({
-        ...t,
-        capabilities: t.available ? await this.deps.agents.capabilities(t.agentId).catch(() => null) : null,
-      })),
-    )
-  }
-
   async execute(
     parentSessionId: string,
     request: { target?: string; role?: string; prompt: string },
@@ -215,15 +119,16 @@ export class SubagentService {
       cancelled: false,
     }
     this.#runs.set(run.id, run)
-    const onAbort = () => void this.cancel(run.id)
+    const onAbort = () => void this.#cancel(run)
     signal?.addEventListener('abort', onAbort)
     let timedOut = false
     const timer = setTimeout(() => {
       timedOut = true
-      void this.cancel(run.id)
+      void this.#cancel(run)
     }, settings.timeoutSeconds * 1000)
     try {
-      const session = await this.deps.agents.newSession(agentId, { subagent: true })
+      // Plain sessions, without the sub-agent server, so delegation stays one level deep.
+      const session = await this.deps.agents.newSession(agentId)
       if ('authRequired' in session) {
         throw new Error(`${agentId} needs you to log in. Start a chat with it once to sign in.`)
       }
@@ -248,17 +153,10 @@ export class SubagentService {
     }
   }
 
-  async cancel(id: string): Promise<boolean> {
-    const run = this.#runs.get(id)
-    if (!run) return false
-    run.cancelled = true
-    if (run.sessionId) await this.deps.agents.cancel(run.sessionId).catch(() => undefined)
-    return true
-  }
-
   /** Cancel everything a parent session started, e.g. when its own turn is cancelled. */
   async cancelChildren(parentSessionId: string): Promise<void> {
-    await Promise.all(this.running(parentSessionId).map((r) => this.cancel(r.id)))
+    const children = [...this.#runs.values()].filter((r) => r.parentSessionId === parentSessionId)
+    await Promise.all(children.map((r) => this.#cancel(r)))
   }
 
   /** Collects a sub-agent's reply. Returns true when the update belongs to a sub-agent session. */
@@ -271,16 +169,15 @@ export class SubagentService {
     return true
   }
 
-  /** A sub-agent's permission request, moved to its parent's chat and labelled with the target. */
+  /** A sub-agent's permission request, moved to its parent's chat. */
   forParent(request: PermissionRequest): PermissionRequest {
     const run = this.#bySession.get(request.sessionId)
-    if (!run) return request
-    const title = request.toolCall.title ?? 'wants to run a tool'
-    return {
-      ...request,
-      sessionId: run.parentSessionId,
-      toolCall: { ...request.toolCall, title: `Sub-agent "${run.target}": ${title}` },
-    }
+    return run ? { ...request, sessionId: run.parentSessionId, subagent: run.target } : request
+  }
+
+  async #cancel(run: Run): Promise<void> {
+    run.cancelled = true
+    if (run.sessionId) await this.deps.agents.cancel(run.sessionId).catch(() => undefined)
   }
 
   /** Switch a fresh session to `model`, matched by value or name (case-insensitive). */

@@ -22,7 +22,10 @@ function PermissionCards({ sessionId }: { sessionId: string }) {
       className="rounded border border-amber-400/40 bg-amber-400/5 px-3 py-2"
     >
       <div className="text-[11px] tracking-wide text-amber-300 uppercase">Permission needed</div>
-      <div className="mt-0.5 mb-2">{request.toolCall.title ?? 'The agent wants to run a tool'}</div>
+      <div className="mt-0.5 mb-2">
+        {request.subagent && <span className="text-muted">Sub-agent "{request.subagent}": </span>}
+        {request.toolCall.title ?? 'The agent wants to run a tool'}
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {request.options.map((option) => (
           <button
