@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type {
+  GitCheckoutResult,
   GitCommitResult,
   GitFileStatus,
   GitLogEntry,
@@ -188,6 +189,33 @@ export class GitService {
       return { ok: true }
     } catch (error) {
       return { ok: false, error: gitError(error) || 'Push failed' }
+    }
+  }
+
+  /**
+   * Fetch a pull request and switch to its branch. A same-repo pull request lands on its own
+   * branch tracking the remote, so the branch view finds it again; a fork's lands on `pr-<number>`.
+   */
+  async checkoutPullRequest(
+    root: string,
+    pullRequest: { number: number; head: string; fromFork: boolean },
+  ): Promise<GitCheckoutResult> {
+    const { number, head, fromFork } = pullRequest
+    try {
+      if (fromFork) {
+        await git(root, ['fetch', 'origin', `pull/${number}/head`])
+        await git(root, ['checkout', '-B', `pr-${number}`, 'FETCH_HEAD'])
+      } else {
+        await git(root, ['fetch', 'origin', `+refs/heads/${head}:refs/remotes/origin/${head}`])
+        const local = await git(root, ['branch', '--list', head])
+        await git(
+          root,
+          local.trim() ? ['checkout', head] : ['checkout', '-b', head, '--track', `origin/${head}`],
+        )
+      }
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: gitError(error) || 'Checkout failed' }
     }
   }
 

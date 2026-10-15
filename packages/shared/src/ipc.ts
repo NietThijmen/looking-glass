@@ -34,7 +34,12 @@ import type {
   PickedRegion,
   PickMode,
 } from './browser'
-import type { PullRequestAction, PullRequestActionResult, PullRequestDetail } from './forge'
+import type {
+  PullRequestAction,
+  PullRequestActionResult,
+  PullRequestDetail,
+  PullRequestSummary,
+} from './forge'
 import type { ReviewEntry } from './review'
 
 export type {
@@ -45,6 +50,7 @@ export type {
   PullRequestDetail,
   PullRequestFile,
   PullRequestFileStatus,
+  PullRequestSummary,
 } from './forge'
 
 export interface AppInfo {
@@ -166,6 +172,11 @@ export interface GitPushResult {
   error?: string
 }
 
+export interface GitCheckoutResult {
+  ok: boolean
+  error?: string
+}
+
 export interface TerminalCreateOptions {
   cols: number
   rows: number
@@ -186,6 +197,7 @@ export type MenuCommand =
   | 'show-search'
   | 'show-git'
   | 'show-commits'
+  | 'show-pull-requests'
   | 'show-agents'
   | 'toggle-picker'
   | 'new-browser-tab'
@@ -214,6 +226,13 @@ export interface InvokeContract {
   'git:push': { args: []; result: GitPushResult }
   /** Open pull request for the current branch, or null when there isn't one. */
   'git:pullRequest': { args: []; result: PullRequestDetail | null }
+  /** Open pull requests of the current branch's upstream repo. */
+  'git:pullRequests': { args: []; result: PullRequestSummary[] }
+  /** Fetch a pull request's branch and switch to it. */
+  'git:checkoutPullRequest': {
+    args: [pullRequest: Pick<PullRequestSummary, 'number' | 'head' | 'fromFork'>]
+    result: GitCheckoutResult
+  }
   /** Acts on pull request `number` in the current branch's upstream repo. */
   'git:pullRequestAction': {
     args: [number: number, action: PullRequestAction]
@@ -377,6 +396,10 @@ export interface LookingglassApi {
     push(): Promise<GitPushResult>
     /** Open pull request for the current branch, or null. A missing GitHub token is null. */
     pullRequest(): Promise<PullRequestDetail | null>
+    pullRequests(): Promise<PullRequestSummary[]>
+    checkoutPullRequest(
+      pullRequest: Pick<PullRequestSummary, 'number' | 'head' | 'fromFork'>,
+    ): Promise<GitCheckoutResult>
     pullRequestAction(number: number, action: PullRequestAction): Promise<PullRequestActionResult>
     onChanged(listener: Listener<'git:changed'>): Unsubscribe
   }

@@ -123,6 +123,15 @@ export function registerWorkspaceHandlers(): void {
     const target = await forgeTarget()
     return target ? target.forge.pullRequest(target.query) : null
   })
+  handle('git:pullRequests', async () => {
+    const target = await forgeTarget()
+    return target ? target.forge.list(target.query) : []
+  })
+  handle('git:checkoutPullRequest', async (_e, pullRequest) => {
+    const result = await git.checkoutPullRequest(requireRoot(), pullRequest)
+    if (result.ok) broadcast('git:changed', null)
+    return result
+  })
   handle('git:pullRequestAction', async (_e, number, action) => {
     const target = await forgeTarget()
     if (!target) return { ok: false, error: 'No forge for this branch.' }

@@ -4,6 +4,7 @@ import type {
   PullRequestComment,
   PullRequestDetail,
   PullRequestFile,
+  PullRequestSummary,
 } from '@lookingglass/shared/forge'
 import { splitDiff, type SplitPatch } from './diff'
 import type { Forge, PullRequestQuery } from './types'
@@ -37,6 +38,14 @@ export const GithubForge: Forge = {
   id: GITHUB_ID,
   matches(remote) {
     return remote.host === 'github.com'
+  },
+  async list(query) {
+    try {
+      const open = await getPages(query, `${repoPath(query)}/pulls?state=open&sort=created&direction=desc`)
+      return open.flatMap((item) => summarize(item) ?? [])
+    } catch {
+      return []
+    }
   },
   async pullRequest(query) {
     try {
@@ -194,6 +203,24 @@ async function loadPullRequest(query: PullRequestQuery): Promise<PullRequestDeta
         return { author: raw.user, body: raw.body, state: raw.state, submittedAt: raw.submitted_at }
       }),
     ),
+  }
+}
+
+function summarize(value: unknown): PullRequestSummary | null {
+  const pull = parsePull(value)
+  if (!pull) return null
+  const raw = asRecord(value)
+  const headRepo = asString(asRecord(asRecord(raw.head).repo).full_name)
+  const baseRepo = asString(asRecord(asRecord(raw.base).repo).full_name)
+  return {
+    number: pull.number,
+    title: asString(pull.title),
+    author: authorLogin(pull.author),
+    base: asString(pull.base),
+    head: asString(pull.head),
+    isDraft: pull.isDraft === true,
+    url: asString(pull.url),
+    fromFork: headRepo !== baseRepo,
   }
 }
 

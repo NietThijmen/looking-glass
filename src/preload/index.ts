@@ -63,6 +63,8 @@ const api: LookingglassApi = {
     commit: (message) => invoke('git:commit', message),
     push: () => invoke('git:push'),
     pullRequest: () => invoke('git:pullRequest'),
+    pullRequests: () => invoke('git:pullRequests'),
+    checkoutPullRequest: (pullRequest) => invoke('git:checkoutPullRequest', pullRequest),
     pullRequestAction: (number, action) => invoke('git:pullRequestAction', number, action),
     onChanged: (listener) => subscribe('git:changed', listener),
   },

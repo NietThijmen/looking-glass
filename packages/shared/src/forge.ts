@@ -48,6 +48,19 @@ export interface PullRequestDetail {
   comments: PullRequestComment[]
 }
 
+/** One row of the pull-request list. */
+export interface PullRequestSummary {
+  number: number
+  title: string
+  author: string
+  base: string
+  head: string
+  isDraft: boolean
+  url: string
+  /** The head branch lives in another repository, so it is not on the remote as `head`. */
+  fromFork: boolean
+}
+
 export type PullRequestMergeMethod = 'merge' | 'squash' | 'rebase'
 
 /** A change the pull-request tab asks the forge to make. */

@@ -225,6 +225,9 @@ importers:
       '@lookingglass/shared':
         specifier: workspace:*
         version: link:packages/shared
+      '@lookingglass/skills':
+        specifier: workspace:*
+        version: link:packages/skills
       '@lookingglass/workspace':
         specifier: workspace:*
         version: link:packages/workspace
@@ -364,6 +367,8 @@ importers:
       diff:
         specifier: 9.0.0
         version: 9.0.0
+
+  packages/skills: {}
 
   packages/shared:
     dependencies:

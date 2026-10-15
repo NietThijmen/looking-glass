@@ -49,6 +49,9 @@ function runMenuCommand(command: MenuCommand): void {
     case 'show-commits':
       ui.showSidebar('commits')
       break
+    case 'show-pull-requests':
+      ui.showSidebar('pullRequests')
+      break
     case 'show-agents':
       ui.showSidebar('agents')
       break
