@@ -2,7 +2,14 @@ import type { McpServer } from '@agentclientprotocol/sdk'
 import { app, BrowserWindow, dialog } from 'electron'
 import os from 'node:os'
 import path from 'node:path'
-import { AgentManager, PermissionService } from '@lookingglass/acp'
+import {
+  AgentManager,
+  PermissionService,
+  readWorkspaceSubagentSettings,
+  SubagentService,
+} from '@lookingglass/acp'
+import type { McpHandle } from '../mcp/http'
+import { startSubagentMcpServer } from '../mcp/subagentMcpServer'
 import { describeMcpServers, mcpServersHash, readWorkspaceMcpServers } from '@lookingglass/acp/mcpConfig'
 import { Checkpoints, ReviewService } from '@lookingglass/review'
 import { EditorState } from '@lookingglass/workspace'
@@ -23,10 +30,12 @@ export const diagnostics = new DiagnosticsService({
   onChange: (path, list) => broadcast('diagnostics:changed', { path, diagnostics: list }),
 })
 const permissions = new PermissionService(
-  (request) => broadcast('agent:permission', request),
+  // A sub-agent's requests are answered in its parent's chat.
+  (request) => broadcast('agent:permission', subagents.forParent(request)),
   (requestId) => broadcast('agent:permissionResolved', { requestId }),
 )
 let mcp: EditorMcpHandle | null = null
+let subagentMcp: McpHandle | null = null
 /** The built-in MCP server's address (for smoke tests that call its tools directly). */
 export const editorMcp = (): EditorMcpHandle | null => mcp
 
@@ -89,21 +98,40 @@ async function askToAllowMcpServers(root: string, servers: McpServer[]): Promise
   return response === 0
 }
 
-export const agents = new AgentManager({
+export const agents: AgentManager = new AgentManager({
   definitions: loadAgentDefinitions,
   workspace,
   editor,
   permissions,
   mcp: () => mcp,
+  subagentMcp: async (): Promise<McpHandle | null> =>
+    subagentMcp && (await subagents.enabled()) ? subagentMcp : null,
   workspaceMcpServers,
   onStatus: (agentId, status) => broadcast('agent:status', { agentId, status }),
-  onSessionUpdate: ({ sessionId, update }) => broadcast('agent:update', { sessionId, update }),
+  onSessionUpdate: (notification) => {
+    // Sub-agent sessions have no chat; their reply goes back to the parent as a tool result.
+    if (subagents.handleUpdate(notification)) return
+    broadcast('agent:update', { sessionId: notification.sessionId, update: notification.update })
+  },
   review,
   terminals: agentTerminals,
   onAgentWrite: (path) => broadcast('editor:reloadFile', { path }),
 })
 
+const subagents: SubagentService = new SubagentService({
+  agents,
+  settings: async () => (workspace.root ? readWorkspaceSubagentSettings(workspace.root) : null),
+})
+
 export async function startAgentServices(): Promise<void> {
+  try {
+    subagentMcp = await startSubagentMcpServer({
+      subagents,
+      sessionForCaller: (caller) => agents.sessionForCaller(caller),
+    })
+  } catch (error) {
+    console.error('[subagents] failed to start sub-agent MCP server', error)
+  }
   try {
     mcp = await startEditorMcpServer({
       workspace: () => workspace.info,
@@ -137,6 +165,8 @@ export async function stopAgentServices(): Promise<void> {
   await diagnostics.dispose()
   await mcp?.close()
   mcp = null
+  await subagentMcp?.close()
+  subagentMcp = null
 }
 
 export function registerAgentHandlers(): void {
@@ -153,7 +183,10 @@ export function registerAgentHandlers(): void {
   handle('agent:loadSession', (_e, agentId, sessionId) => agents.loadSession(agentId, sessionId))
   handle('agent:authenticate', (_e, agentId, methodId) => agents.authenticate(agentId, methodId))
   handle('agent:prompt', (_e, sessionId, prompt) => agents.prompt(sessionId, prompt))
-  handle('agent:cancel', (_e, sessionId) => agents.cancel(sessionId))
+  handle('agent:cancel', async (_e, sessionId) => {
+    await subagents.cancelChildren(sessionId)
+    await agents.cancel(sessionId)
+  })
   handle('agent:setMode', (_e, sessionId, modeId) => agents.setMode(sessionId, modeId))
   handle('agent:setConfigOption', (_e, sessionId, configId, value) =>
     agents.setConfigOption(sessionId, configId, value),

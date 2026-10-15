@@ -1,13 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { randomBytes, timingSafeEqual } from 'node:crypto'
-import http from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { z } from 'zod'
 import { formatDiagnostics, type DiagnosticsByPath } from '@lookingglass/shared/diagnostics'
 import type { GitStatus, WorkspaceInfo } from '@lookingglass/shared/ipc'
 import { registerBrowserTools, type BrowserToolDeps } from '../browser/browserTools'
 import type { EditorState } from '@lookingglass/workspace'
+import { serveMcp, type McpHandle } from './http'
 import { ToolSet } from './toolSet'
 
 export interface EditorMcpDeps {
@@ -20,12 +17,7 @@ export interface EditorMcpDeps {
   browser?: BrowserToolDeps
 }
 
-export interface EditorMcpHandle {
-  url: string
-  /** Header that must accompany every request. */
-  headers: Array<{ name: string; value: string }>
-  close(): Promise<void>
-}
+export type EditorMcpHandle = McpHandle
 
 const text = (value: unknown) => ({
   content: [
@@ -116,39 +108,8 @@ function buildServer(deps: EditorMcpDeps): McpServer {
 
 /**
  * The built-in MCP server handed to every agent session, so any ACP agent gets
- * editor-aware tools. Streamable HTTP on loopback, guarded by a random bearer
- * token; each request gets a fresh stateless server instance.
+ * editor-aware tools.
  */
-export async function startEditorMcpServer(deps: EditorMcpDeps): Promise<EditorMcpHandle> {
-  const token = randomBytes(24).toString('hex')
-  const expected = Buffer.from(`Bearer ${token}`)
-
-  const httpServer = http.createServer(async (req, res) => {
-    const auth = Buffer.from(req.headers.authorization ?? '')
-    if (req.url !== '/mcp' || auth.length !== expected.length || !timingSafeEqual(auth, expected)) {
-      res.writeHead(401).end()
-      return
-    }
-    const server = buildServer(deps)
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    res.on('close', () => {
-      void transport.close()
-      void server.close()
-    })
-    try {
-      await server.connect(transport)
-      await transport.handleRequest(req, res)
-    } catch (error) {
-      console.error('[mcp]', error)
-      if (!res.headersSent) res.writeHead(500).end()
-    }
-  })
-
-  await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve))
-  const { port } = httpServer.address() as AddressInfo
-  return {
-    url: `http://127.0.0.1:${port}/mcp`,
-    headers: [{ name: 'Authorization', value: `Bearer ${token}` }],
-    close: () => new Promise((resolve) => httpServer.close(() => resolve())),
-  }
+export function startEditorMcpServer(deps: EditorMcpDeps): Promise<EditorMcpHandle> {
+  return serveMcp('mcp', () => buildServer(deps))
 }

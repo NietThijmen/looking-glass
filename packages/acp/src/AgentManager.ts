@@ -1,4 +1,5 @@
 import { RequestError, type McpServer, type SessionNotification } from '@agentclientprotocol/sdk'
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type {
@@ -21,6 +22,8 @@ export interface AgentManagerDeps {
   editor: EditorBuffers
   permissions: PermissionService
   mcp(): McpHost | null
+  /** The sub-agent server, when the workspace has sub-agents switched on. */
+  subagentMcp?(): Promise<McpHost | null>
   /** The workspace's own MCP servers, once the user has allowed them. */
   workspaceMcpServers?(): Promise<McpServer[]>
   onStatus(agentId: string, status: AgentStatus): void
@@ -42,6 +45,9 @@ export function sliceLines(content: string, line?: number | null, limit?: number
 }
 
 const AUTH_REQUIRED_CODE = RequestError.authRequired().code
+/** Header telling the sub-agent server which session is calling (see `sessionForCaller`). */
+export const CALLER_HEADER = 'X-Lookingglass-Caller'
+
 /** `session/list` pages to read; history beyond that is rarely what anyone is looking for. */
 const MAX_HISTORY_PAGES = 5
 const MAX_HISTORY = 50
@@ -60,6 +66,8 @@ export class AgentManager {
   #running = new Map<string, RunningAgent>()
   #status = new Map<string, AgentStatus>()
   #sessions = new Map<string, string>()
+  /** Caller header value → session id. */
+  #callers = new Map<string, string>()
 
   constructor(private readonly deps: AgentManagerDeps) {}
 
@@ -71,12 +79,18 @@ export class AgentManager {
     return this.#status.get(agentId) ?? { state: 'stopped' }
   }
 
-  async newSession(agentId: string): Promise<NewSessionResult | AuthRequired> {
+  /** `subagent` sessions don't get the sub-agent server, so delegation stays one level deep. */
+  async newSession(
+    agentId: string,
+    options?: { subagent?: boolean },
+  ): Promise<NewSessionResult | AuthRequired> {
     const root = this.#root()
     const agent = await this.#ensure(agentId)
+    const caller = options?.subagent ? null : randomUUID()
     try {
-      const response = await agent.client.newSession(root, await this.#mcpServers(agent.client))
+      const response = await agent.client.newSession(root, await this.#mcpServers(agent.client, caller))
       this.#sessions.set(response.sessionId, agentId)
+      if (caller) this.#callers.set(caller, response.sessionId)
       return this.#sessionResult(
         agent.client,
         agentId,
@@ -123,12 +137,38 @@ export class AgentManager {
     }
     // Mapped before the request: tool calls during the replay are routed by session.
     this.#sessions.set(sessionId, agentId)
+    const caller = randomUUID()
+    this.#callers.set(caller, sessionId)
     try {
-      const response = await agent.client.loadSession(sessionId, root, await this.#mcpServers(agent.client))
+      const response = await agent.client.loadSession(
+        sessionId,
+        root,
+        await this.#mcpServers(agent.client, caller),
+      )
       return this.#sessionResult(agent.client, agentId, sessionId, response.modes, response.configOptions)
     } catch (error) {
       this.#sessions.delete(sessionId)
+      this.#callers.delete(caller)
       return this.#authRequired(agent.client, agentId, error)
+    }
+  }
+
+  /** The session a sub-agent server request came from, by its caller header. */
+  sessionForCaller(caller: string): string | undefined {
+    const sessionId = this.#callers.get(caller)
+    return sessionId && this.#sessions.has(sessionId) ? sessionId : undefined
+  }
+
+  /** What an agent reported at startup (starts it if needed). */
+  async capabilities(agentId: string): Promise<Record<string, unknown>> {
+    const init = (await this.#ensure(agentId)).client.initializeResponse
+    const caps = init?.agentCapabilities
+    return {
+      agentName: init?.agentInfo?.title ?? init?.agentInfo?.name ?? null,
+      agentVersion: init?.agentInfo?.version ?? null,
+      prompt: caps?.promptCapabilities ?? {},
+      mcp: caps?.mcpCapabilities ?? {},
+      loadSession: caps?.loadSession === true,
     }
   }
 
@@ -196,6 +236,7 @@ export class AgentManager {
     }
     this.#running.clear()
     this.#sessions.clear()
+    this.#callers.clear()
   }
 
   #root(): string {
@@ -247,13 +288,25 @@ export class AgentManager {
     return agent.client
   }
 
-  /** The built-in editor server plus the workspace's own, minus transports the agent can't use. */
-  async #mcpServers(client: AcpClient): Promise<McpServer[]> {
+  /**
+   * The built-in editor server, the sub-agent server (for sessions with a `caller`)
+   * and the workspace's own, minus transports the agent can't use.
+   */
+  async #mcpServers(client: AcpClient, caller: string | null): Promise<McpServer[]> {
     const caps = client.initializeResponse?.agentCapabilities?.mcpCapabilities
     const mcp = this.deps.mcp()
     const servers: McpServer[] = mcp
       ? [{ type: 'http', name: 'lookingglass', url: mcp.url, headers: mcp.headers }]
       : []
+    const subagents = caller ? await this.deps.subagentMcp?.() : null
+    if (subagents && caller) {
+      servers.push({
+        type: 'http',
+        name: 'subagents',
+        url: subagents.url,
+        headers: [...subagents.headers, { name: CALLER_HEADER, value: caller }],
+      })
+    }
     servers.push(...((await this.deps.workspaceMcpServers?.()) ?? []))
     return servers.filter(
       (s) => !('type' in s) || (s.type === 'http' ? !!caps?.http : s.type === 'sse' ? !!caps?.sse : false),
@@ -315,6 +368,8 @@ export class AgentManager {
           this.#running.delete(agentId)
           for (const [sessionId, owner] of this.#sessions)
             if (owner === agentId) this.#sessions.delete(sessionId)
+          for (const [caller, sessionId] of this.#callers)
+            if (!this.#sessions.has(sessionId)) this.#callers.delete(caller)
           this.#setStatus(agentId, error ? { state: 'error', message: error.message } : { state: 'stopped' })
         },
       },

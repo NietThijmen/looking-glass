@@ -3,10 +3,10 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatus, PermissionRequest } from '@lookingglass/shared/agent'
 import type { ReviewEntry } from '@lookingglass/shared/review'
-import { AgentManager, type AgentDefinition, PermissionService } from '@lookingglass/acp'
+import { AgentManager, type AgentDefinition, PermissionService, SubagentService } from '@lookingglass/acp'
 import { Checkpoints, ReviewService } from '@lookingglass/review'
 import { EditorState, WorkspaceService } from '@lookingglass/workspace'
 import { AgentTerminals } from '../terminal/AgentTerminals'
@@ -226,5 +226,44 @@ describe('AgentManager with the fake agent', () => {
   it('refuses to load a session the agent does not know', async () => {
     await setup()
     await expect(manager.loadSession('fake', 'nope')).rejects.toThrow()
+  })
+})
+
+describe('SubagentService with the fake agent', () => {
+  const subagentsFor = () =>
+    new SubagentService({
+      agents: manager,
+      settings: async () => ({
+        enabled: true,
+        targets: { fake: '@fake' },
+        defaultTarget: 'fake',
+        timeoutSeconds: 60,
+      }),
+    })
+
+  it("returns the sub-agent's reply without streaming it to a chat", async () => {
+    await setup()
+    const subagents = subagentsFor()
+    // Wire updates the way the app does: sub-agent updates go to the service only.
+    const deps = (manager as unknown as { deps: { onSessionUpdate(n: SessionNotification): void } }).deps
+    deps.onSessionUpdate = (n) => {
+      if (!subagents.handleUpdate(n)) updates.push(n)
+    }
+    const result = await subagents.execute('parent', { prompt: 'hello' })
+    expect(result).toMatchObject({ stopReason: 'end_turn', agentId: 'fake', model: null })
+    expect(result.text).toContain('You said: **hello**')
+    expect(updates).toEqual([])
+  })
+
+  it("asks for a sub-agent's permissions in the parent's chat", async () => {
+    await setup()
+    const subagents = subagentsFor()
+    const running = subagents.execute('parent', { prompt: 'edit' })
+    await vi.waitFor(() => expect(prompts).toHaveLength(1))
+    const request = subagents.forParent(prompts[0]!)
+    expect(request.sessionId).toBe('parent')
+    expect(request.toolCall.title).toMatch(/^Sub-agent "fake": /)
+    await subagents.cancelChildren('parent')
+    expect((await running).stopReason).toBe('cancelled')
   })
 })
