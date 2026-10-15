@@ -2,6 +2,7 @@ import { BrowserWindow, clipboard, dialog } from 'electron'
 import type { FsChange, WorkspaceInfo } from '@lookingglass/shared/ipc'
 import { isSmokeTest } from '../env'
 import { saveAppState } from '../state/appState'
+import { addRecentWorkspace } from '../state/recentWorkspaces'
 import { TerminalService } from '../terminal/TerminalService'
 import {
   forgeFor,
@@ -61,7 +62,10 @@ export async function openWorkspace(root: string): Promise<WorkspaceInfo> {
   }
   search.cancel()
   // Smoke runs open throwaway fixtures; don't make them the user's "last workspace".
-  if (!isSmokeTest) await saveAppState({ lastWorkspace: info.root })
+  if (!isSmokeTest) {
+    await saveAppState({ lastWorkspace: info.root })
+    await addRecentWorkspace(info.root)
+  }
   broadcast('workspace:changed', info)
   return info
 }

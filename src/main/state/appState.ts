@@ -5,6 +5,8 @@ import path from 'node:path'
 /** Small persisted app state in userData. Not for anything large or secret. */
 export interface AppState {
   lastWorkspace?: string
+  /** Folders opened before, most recent first. */
+  recentWorkspaces?: string[]
   /** Workspace root → hash of the MCP server list the user allowed for it. */
   trustedMcpServers?: Record<string, string>
 }
