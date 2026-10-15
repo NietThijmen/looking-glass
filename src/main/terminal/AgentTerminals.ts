@@ -5,6 +5,7 @@ import type {
 } from '@agentclientprotocol/sdk'
 import type { TerminalInfo } from '@lookingglass/shared/ipc'
 import type { TerminalService } from './TerminalService'
+import { loginShellPath, mergePaths } from './shellPath'
 
 const DEFAULT_OUTPUT_LIMIT = 1024 * 1024
 
@@ -48,13 +49,19 @@ export class AgentTerminals {
     private readonly opened: (info: TerminalInfo) => void,
   ) {}
 
-  create(params: CreateTerminalRequest, cwd: string, agentLabel: string): string {
+  async create(params: CreateTerminalRequest, cwd: string, agentLabel: string): Promise<string> {
     const shell = process.env['SHELL'] ?? '/bin/sh'
     const args = params.args ?? []
     // No args: treat `command` as a shell command line, which is how most agents send it.
+    // With args, still go through the login shell (`exec`) so `command` is found on the user's PATH.
     const command =
-      args.length === 0 ? { file: shell, args: ['-lc', params.command] } : { file: params.command, args }
+      args.length === 0
+        ? { file: shell, args: ['-lc', params.command] }
+        : { file: shell, args: ['-lc', 'exec "$0" "$@"', params.command, ...args] }
     const env = Object.fromEntries((params.env ?? []).map((v) => [v.name, v.value]))
+    // The agent's own PATH override wins; otherwise give it the user's shell PATH.
+    const path = mergePaths(await loginShellPath(), process.env['PATH'])
+    if (path && !('PATH' in env)) env['PATH'] = path
     const title = `${agentLabel}: ${[params.command, ...args].join(' ').slice(0, 40)}`
 
     const info = this.terminals.create(cwd, { cols: 120, rows: 30 }, { ...command, env, title })

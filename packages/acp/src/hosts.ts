@@ -27,7 +27,7 @@ export interface ReviewHost {
 
 /** Agent terminals. The real pty service stays in the app. */
 export interface TerminalHost {
-  create(params: CreateTerminalRequest, cwd: string, agentLabel: string): string
+  create(params: CreateTerminalRequest, cwd: string, agentLabel: string): string | Promise<string>
   output(terminalId: string): TerminalOutputResponse
   waitForExit(terminalId: string): Promise<TerminalExitStatus>
   kill(terminalId: string): void
