@@ -7,6 +7,7 @@ import { registerBrowserHandlers } from './ipc/browser'
 import { closeWorkspace, openWorkspace, registerWorkspaceHandlers, terminals } from './ipc/workspace'
 import { registerSettingsHandlers } from './ipc/settings'
 import { installMenu } from './menu'
+import { loginShellPath, mergePaths } from './terminal/shellPath'
 import { loadSettings } from './state/settings'
 import { startAutoUpdates } from './updater'
 import { applyHardening } from './security/hardening'
@@ -42,6 +43,8 @@ if (!isSmokeTest && !app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(async () => {
     applyHardening()
+    // Finder/Dock launches get a minimal PATH; without the login shell's, agents, `gh` and `npm` aren't found.
+    if (!isDev) process.env['PATH'] = mergePaths(await loginShellPath(), process.env['PATH'])
     // Packaged builds get their icon from electron-builder; dev runs need it set by hand.
     if (isDev && process.platform === 'darwin') app.dock?.setIcon(join(app.getAppPath(), 'build/icon.png'))
     if (!isDev) serveRenderer(rendererDir)
