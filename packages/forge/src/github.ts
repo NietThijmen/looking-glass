@@ -75,7 +75,7 @@ async function request(
   path: string,
   options: { body?: unknown; accept?: string } = {},
 ): Promise<Response> {
-  if (!query.token) throw new GithubError('No GitHub token. Set GH_TOKEN or GITHUB_TOKEN.')
+  if (!query.token) throw new GithubError('No GitHub token. Run `gh auth login` or set GH_TOKEN.')
   const response = await query.fetch(path.startsWith('http') ? path : `${API}${path}`, {
     method,
     headers: {

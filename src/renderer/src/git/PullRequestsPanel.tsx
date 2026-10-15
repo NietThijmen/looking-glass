@@ -126,7 +126,7 @@ export function PullRequestsPanel() {
         {pullRequests === null ? (
           <div className="p-3 text-muted">Loading pull requests…</div>
         ) : pullRequests.length === 0 ? (
-          <div className="p-3 text-muted">No open pull requests, or no GitHub token (GH_TOKEN) found.</div>
+          <div className="p-3 text-muted">No open pull requests, or no GitHub token found (run `gh auth login` or set GH_TOKEN).</div>
         ) : (
           pullRequests.map((pr) => (
             <PullRequestRow
